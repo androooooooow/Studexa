@@ -7,7 +7,8 @@ import aiosqlite
 from fastapi import HTTPException, status
 from app.config import settings
 from app.security.sessions import to_iso, utc_now
-from app.services.ollama_service import OllamaGenerationError, generate_with_ollama
+from app.services import ollama_service
+from app.services.ollama_service import OllamaGenerationError
 from app.services.retrieval_service import retrieve_relevant_chunks
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ async def _default_execute_job(
     """
     Execute an AI job against local Ollama (gemma3:1b) using retrieved FTS5 chunks when document_id is present.
     """
-    if job_type in _JOB_HANDLERS:
+    if job_type in _JOB_HANDLERS and (payload.get("document_id") or job_type == "tutor"):
         return await _JOB_HANDLERS[job_type](db, job_id, session_id, payload)
 
     document_id = payload.get("document_id")
@@ -85,7 +86,7 @@ async def _default_execute_job(
             f"Student request: {user_prompt or 'Provide a brief study assistant response.'}"
         )
 
-    response_text = await generate_with_ollama(
+    response_text = await ollama_service.generate_with_ollama(
         prompt=full_prompt,
         system_prompt=system_prompt,
         expect_json=False,
@@ -436,7 +437,7 @@ class SingleAIQueueWorker:
                     await db.execute("PRAGMA busy_timeout = 5000;")
                     result_data = await asyncio.wait_for(
                         _default_execute_job(db, job_id, session_id, job_type, payload),
-                        timeout=120.0,
+                        timeout=240.0,
                     )
 
                 completed_at = to_iso(utc_now())

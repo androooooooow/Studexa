@@ -57,7 +57,7 @@ async def test_fifo_single_concurrency_and_failure_isolation(monkeypatch):
         execution_order.append(prompt.splitlines()[-1])
         return "Mocked Gemma 3 1B output"
 
-    monkeypatch.setattr(worker_module, "generate_with_ollama", fake_generate_with_ollama)
+    monkeypatch.setattr(worker_module.ollama_service, "generate_with_ollama", fake_generate_with_ollama)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

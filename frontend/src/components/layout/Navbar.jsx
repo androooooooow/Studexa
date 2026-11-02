@@ -16,6 +16,7 @@ import {
   Menu,
   MessageSquare,
   Plus,
+  Presentation,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -40,6 +41,7 @@ const NAV_SECTIONS = [
   {
     heading: 'AI Study Tools',
     items: [
+      { to: '/reviewer', label: 'AI Reviewer Maker', icon: Presentation },
       { to: '/summarizer', label: 'AI Summarizer', icon: Sparkles },
       { to: '/quizzes', label: 'Quiz Generator', icon: BrainCircuit },
       { to: '/flashcards', label: 'Flashcards', icon: BookOpen },
@@ -63,7 +65,11 @@ const PAGE_TITLES = {
   },
   '/documents': {
     title: 'PDF & Document Analyzer',
-    subtitle: 'Upload PDF or DOCX course materials for full-text search & AI study tools',
+    subtitle: 'Upload PDF, PPTX/PPT, or DOCX course materials for full-text search & AI study tools',
+  },
+  '/reviewer': {
+    title: 'AI Study Reviewer Maker',
+    subtitle: 'Convert lecture slides and handouts into organized, printable study guides with one-click PDF export',
   },
   '/summarizer': {
     title: 'AI Summarizer',
@@ -116,12 +122,14 @@ export default function AppLayout({ children }) {
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
             <Link to="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-600/20">
-                <GraduationCap className="h-5 w-5" />
-              </div>
+              <img
+                src="/studexa-logo.png"
+                alt="Studexa Logo"
+                className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-slate-200/80"
+              />
               <div>
-                <span className="font-display text-lg font-bold tracking-tight text-slate-900">
-                  StudyMate <span className="text-indigo-600">AI</span>
+                <span className="font-display text-lg font-extrabold tracking-tight text-slate-900">
+                  Stud<span className="text-indigo-600">exa</span>
                 </span>
                 <span className="ml-2.5 hidden rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 sm:inline-block">
                   Free • No Account Needed
@@ -151,11 +159,13 @@ export default function AppLayout({ children }) {
 
         <footer className="border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6 lg:px-8">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-white">
-                <GraduationCap className="h-3.5 w-3.5" />
-              </div>
-              <span className="font-semibold text-slate-800">StudyMate AI</span>
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/studexa-logo.png"
+                alt="Studexa Logo"
+                className="h-7 w-7 rounded-lg object-cover ring-1 ring-slate-200"
+              />
+              <span className="font-display font-bold text-slate-800">Studexa</span>
               <span>— Public Anonymous AI Study Assistant</span>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-slate-500">
@@ -179,12 +189,14 @@ export default function AppLayout({ children }) {
         {/* Brand Header */}
         <div className="flex h-16 items-center justify-between border-b border-slate-100 px-5">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-600/25">
-              <GraduationCap className="h-5 w-5" />
-            </div>
+            <img
+              src="/studexa-logo.png"
+              alt="Studexa Logo"
+              className="h-10 w-10 rounded-xl object-cover shadow-sm ring-1 ring-slate-200/80"
+            />
             <div>
-              <span className="font-display text-base font-bold tracking-tight text-slate-900">
-                StudyMate <span className="text-indigo-600">AI</span>
+              <span className="font-display text-base font-extrabold tracking-tight text-slate-900">
+                Stud<span className="text-indigo-600">exa</span>
               </span>
               <p className="text-[11px] font-medium text-slate-400">Student Workspace</p>
             </div>
@@ -407,7 +419,7 @@ export default function AppLayout({ children }) {
 
             <div className="mt-4 space-y-3 text-xs leading-relaxed text-slate-600">
               <p>
-                StudyMate AI does <strong>not</strong> require an account or login. When you visit,
+                Studexa does <strong>not</strong> require an account or login. When you visit,
                 your browser is assigned a cryptographically random 256-bit session token.
               </p>
               <div className="rounded-xl bg-slate-50 p-3 font-mono text-[11px] text-slate-700">

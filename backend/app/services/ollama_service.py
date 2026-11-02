@@ -18,9 +18,40 @@ class OllamaGenerationError(Exception):
     """Raised when local Ollama fails or returns an unrecoverable malformed response."""
 
 
+def _salvage_truncated_json_array(text: str) -> Optional[Dict[str, Any]]:
+    """
+    If an LLM response containing a list of objects (e.g. {"questions": [ {...}, {...}, {"question": "truncated...)
+    was cut off mid-generation, salvage all complete {...} objects before the cutoff.
+    """
+    first_brace = text.find("{")
+    if first_brace == -1:
+        return None
+    sub = text[first_brace:]
+    # Find the last closing brace of a complete array item '},' or '}' before the end
+    # Try progressively earlier '}' positions from the right and close with ']}'
+    pos = len(sub)
+    attempts = 0
+    while pos > 0 and attempts < 40:
+        idx = sub.rfind("}", 0, pos)
+        if idx == -1:
+            break
+        attempts += 1
+        for suffix in ("}", "]}", "]}}"):
+            candidate = sub[: idx + 1] + suffix
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+        pos = idx
+    return None
+
+
 def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
     """
-    Extract and parse a JSON object from LLM output, stripping markdown code fences if present.
+    Extract and parse a JSON object from LLM output, stripping markdown code fences if present,
+    and salvaging truncated JSON arrays when token limits are reached.
     """
     cleaned = (raw_text or "").strip()
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL)
@@ -32,14 +63,20 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
         if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
             cleaned = cleaned[first_brace : last_brace + 1]
 
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        salvaged = _salvage_truncated_json_array(raw_text or "")
+        if salvaged is not None:
+            return salvaged
+        raise
 
 
 async def generate_with_ollama(
     prompt: str,
     system_prompt: Optional[str] = None,
     expect_json: bool = False,
-    timeout_seconds: float = 90.0,
+    timeout_seconds: float = 180.0,
 ) -> str:
     """
     Send a single generation request to local Ollama (127.0.0.1:11434) running gemma3:1b.
@@ -53,8 +90,10 @@ async def generate_with_ollama(
         "prompt": prompt,
         "stream": False,
         "options": {
-            "temperature": 0.25,
-            "num_predict": 1536,
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "repeat_penalty": 1.2,
+            "num_predict": 4096,
         },
     }
     if system_prompt:
@@ -65,6 +104,18 @@ async def generate_with_ollama(
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.post(url, json=payload)
+            # If Ollama's JSON grammar sampler hits a token repeat limit on gemma3:1b,
+            # automatically retry once without strict format='json' and higher temperature.
+            if response.status_code == 500 and "repeat limit" in response.text.lower():
+                retry_payload = dict(payload)
+                retry_payload.pop("format", None)
+                retry_payload["options"] = {
+                    "temperature": 0.45,
+                    "top_p": 0.92,
+                    "repeat_penalty": 1.3,
+                    "num_predict": 1800,
+                }
+                response = await client.post(url, json=retry_payload)
     except httpx.TimeoutException as exc:
         raise OllamaGenerationError(
             "Local AI generation timed out. Please try a shorter prompt or smaller section."

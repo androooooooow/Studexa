@@ -43,7 +43,7 @@ def generate_material_pdf_bytes(
     story.append(Paragraph(escape(title), title_style))
     story.append(
         Paragraph(
-            escape(f"StudyMate AI — {material_type.upper()} Study Material"),
+            escape(f"Studexa — {material_type.upper()} Study Material"),
             styles["Italic"],
         )
     )
@@ -51,7 +51,53 @@ def generate_material_pdf_bytes(
 
     data = json.loads(content_json_str) if content_json_str else {}
 
-    if material_type == "summary":
+    if material_type == "reviewer":
+        rev = data.get("reviewer", {})
+        story.append(Paragraph("Executive Summary", heading_style))
+        story.append(Paragraph(escape(rev.get("executive_summary", "")), body_style))
+        story.append(Spacer(1, 10))
+
+        objectives = rev.get("learning_objectives", [])
+        if objectives:
+            story.append(Paragraph("Learning Objectives", heading_style))
+            for obj in objectives:
+                story.append(Paragraph(f"• {escape(str(obj))}", body_style))
+            story.append(Spacer(1, 10))
+
+        topics = rev.get("topics", [])
+        if topics:
+            story.append(Paragraph("Comprehensive Topic Breakdown", heading_style))
+            for top in topics:
+                top_title = escape(str(top.get("topic_title", "Topic")))
+                story.append(Paragraph(f"<b>{top_title}</b>", body_style))
+                for pt in top.get("bullet_points", []):
+                    story.append(Paragraph(f"&nbsp;&nbsp;&nbsp;• {escape(str(pt))}", body_style))
+                story.append(Spacer(1, 6))
+
+        key_terms = rev.get("key_terms", [])
+        if key_terms:
+            story.append(Spacer(1, 8))
+            story.append(Paragraph("Key Terms & High-Yield Definitions", heading_style))
+            for kt in key_terms:
+                term = escape(str(kt.get("term", "")))
+                defn = escape(str(kt.get("definition", "")))
+                story.append(Paragraph(f"<b>{term}:</b> {defn}", body_style))
+
+        memory_aids = rev.get("memory_aids", [])
+        if memory_aids:
+            story.append(Spacer(1, 8))
+            story.append(Paragraph("Memory Aids & Quick Formulas", heading_style))
+            for aid in memory_aids:
+                story.append(Paragraph(f"💡 {escape(str(aid))}", body_style))
+
+        questions = rev.get("practice_questions", [])
+        if questions:
+            story.append(Spacer(1, 8))
+            story.append(Paragraph("Quick Self-Check Questions", heading_style))
+            for q_idx, q in enumerate(questions, start=1):
+                story.append(Paragraph(f"<b>Q{q_idx}.</b> {escape(str(q))}", body_style))
+
+    elif material_type == "summary":
         summary = data.get("summary", {})
         story.append(Paragraph("Overview", heading_style))
         story.append(Paragraph(escape(summary.get("overview", "")), body_style))

@@ -13,6 +13,7 @@ import QuizGenerator from './pages/QuizGenerator';
 import StudyLibrary from './pages/StudyLibrary';
 import StudyPlanner from './pages/StudyPlanner';
 import Summarizer from './pages/Summarizer';
+import AIReviewerMaker from './pages/AIReviewerMaker';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/documents" element={<PDFAnalyzer />} />
+            <Route path="/reviewer" element={<AIReviewerMaker />} />
             <Route path="/summarizer" element={<Summarizer />} />
             <Route path="/quizzes" element={<QuizGenerator />} />
             <Route path="/flashcards" element={<Flashcards />} />

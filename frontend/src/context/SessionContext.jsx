@@ -101,7 +101,7 @@ export function SessionProvider({ children }) {
     } catch (err) {
       setError(
         err?.response?.data?.detail ||
-          'Unable to sync with StudyMate AI backend.'
+          'Unable to sync with Studexa backend.'
       );
     }
   }, [syncDocuments]);

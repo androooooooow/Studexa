@@ -4,6 +4,10 @@ import {
   getStoredSessionToken,
   setStoredSession,
 } from './session';
+import {
+  buildSelectablePdfFromText,
+  extractTextFromPptxFile,
+} from '../utils/pptxClientConverter';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -22,6 +26,30 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+export function formatApiError(err, fallback = 'An unexpected error occurred.') {
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail;
+  }
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        const field = Array.isArray(item?.loc) ? item.loc[item.loc.length - 1] : '';
+        const msg = item?.msg || 'Invalid input';
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join('; ');
+  }
+  if (detail && typeof detail === 'object') {
+    return detail.message || detail.msg || JSON.stringify(detail);
+  }
+  if (typeof err?.message === 'string' && err.message.trim()) {
+    return err.message;
+  }
+  return fallback;
+}
 
 export async function fetchHealth() {
   const response = await apiClient.get('/api/health');
@@ -63,13 +91,39 @@ export async function initializeOrRestoreSession() {
 export async function uploadDocument(file) {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await apiClient.post('/api/documents/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-    timeout: 60000,
-  });
-  return response.data;
+  try {
+    const response = await apiClient.post('/api/documents/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      timeout: 60000,
+    });
+    return response.data;
+  } catch (err) {
+    const isPpt = /\.(pptx|ppt)$/i.test(file?.name || '');
+    if (isPpt && err?.response?.status === 400) {
+      // Fallback when running backend process was started before .pptx support was added
+      const extractedText = await extractTextFromPptxFile(file);
+      const convertedPdfFile = buildSelectablePdfFromText(
+        extractedText,
+        file.name
+      );
+      const fallbackForm = new FormData();
+      fallbackForm.append('file', convertedPdfFile);
+      const retryResp = await apiClient.post(
+        '/api/documents/upload',
+        fallbackForm,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000,
+        }
+      );
+      return retryResp.data;
+    }
+    throw err;
+  }
 }
 
 export async function fetchDocuments() {
@@ -112,7 +166,7 @@ export async function cancelAIJob(jobId) {
   await apiClient.delete(`/api/ai/jobs/${jobId}`);
 }
 
-export async function pollJobUntilDone(jobId, onTick = null, maxWaitMs = 150000) {
+export async function pollJobUntilDone(jobId, onTick = null, maxWaitMs = 250000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     const job = await fetchAIJob(jobId);
@@ -143,13 +197,56 @@ export async function fetchSummaries() {
   return response.data || [];
 }
 
-export async function generateQuiz({ document_id, question_count = 5, difficulty = 'medium' }) {
-  const response = await apiClient.post('/api/quizzes/generate', {
-    document_id,
-    question_count,
-    difficulty,
-  });
-  return response.data;
+/* ==================== AI REVIEWER MAKER ==================== */
+
+export async function generateReviewer({ document_id, mode = 'standard' }) {
+  try {
+    const response = await apiClient.post('/api/reviewers/generate', {
+      document_id,
+      mode,
+    });
+    return response.data;
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      // Fallback: if running backend process doesn't have /api/reviewers mounted yet, fallback through summary
+      const response = await apiClient.post('/api/summaries/generate', {
+        document_id,
+        style: mode === 'in_depth' ? 'detailed' : mode === 'exam_focused' ? 'medium' : 'short',
+      });
+      return response.data;
+    }
+    throw err;
+  }
+}
+
+export async function fetchReviewers() {
+  try {
+    const response = await apiClient.get('/api/reviewers');
+    return response.data || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function generateQuiz({ document_id, question_count = 20, difficulty = 'medium' }) {
+  try {
+    const response = await apiClient.post('/api/quizzes/generate', {
+      document_id,
+      question_count,
+      difficulty,
+    });
+    return response.data;
+  } catch (err) {
+    if (err?.response?.status === 422 && question_count > 5) {
+      const response = await apiClient.post('/api/quizzes/generate', {
+        document_id,
+        question_count: 5,
+        difficulty,
+      });
+      return response.data;
+    }
+    throw err;
+  }
 }
 
 export async function fetchQuizzes(includeAnswers = false) {
@@ -166,12 +263,23 @@ export async function submitQuiz(quizId, answers) {
   return response.data;
 }
 
-export async function generateFlashcards({ document_id, card_count = 8 }) {
-  const response = await apiClient.post('/api/flashcards/generate', {
-    document_id,
-    card_count,
-  });
-  return response.data;
+export async function generateFlashcards({ document_id, card_count = 20 }) {
+  try {
+    const response = await apiClient.post('/api/flashcards/generate', {
+      document_id,
+      card_count,
+    });
+    return response.data;
+  } catch (err) {
+    if (err?.response?.status === 422 && card_count > 20) {
+      const response = await apiClient.post('/api/flashcards/generate', {
+        document_id,
+        card_count: 20,
+      });
+      return response.data;
+    }
+    throw err;
+  }
 }
 
 export async function fetchFlashcardDecks() {
@@ -198,13 +306,25 @@ export async function fetchTutorConversationDetail(conversationId) {
   return response.data;
 }
 
-export async function generateExam({ document_id, question_count = 10, difficulty = 'medium' }) {
-  const response = await apiClient.post('/api/exams/generate', {
-    document_id,
-    question_count,
-    difficulty,
-  });
-  return response.data;
+export async function generateExam({ document_id, question_count = 20, difficulty = 'medium' }) {
+  try {
+    const response = await apiClient.post('/api/exams/generate', {
+      document_id,
+      question_count,
+      difficulty,
+    });
+    return response.data;
+  } catch (err) {
+    if (err?.response?.status === 422 && question_count > 5) {
+      const response = await apiClient.post('/api/exams/generate', {
+        document_id,
+        question_count: 5,
+        difficulty,
+      });
+      return response.data;
+    }
+    throw err;
+  }
 }
 
 export async function fetchExams() {

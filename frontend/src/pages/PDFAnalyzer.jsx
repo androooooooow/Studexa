@@ -148,10 +148,10 @@ export default function PDFAnalyzer() {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h2 className="font-display text-lg font-bold text-slate-900">
-              Upload PDF or DOCX Study Material
+              Upload PDF, PPTX/PPT, or DOCX Study Material
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Validated up to <strong>20 MB</strong>. Extracted text is split into chunks and
+              Validated up to <strong>20 MB</strong>. Extracted slide text and lecture notes are split into chunks and
               indexed in SQLite FTS5 under your private session.
             </p>
           </div>
@@ -172,7 +172,7 @@ export default function PDFAnalyzer() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".pdf,.pptx,.ppt,.docx,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             onChange={handleFileSelect}
             disabled={uploading}
             className="hidden"
@@ -187,7 +187,7 @@ export default function PDFAnalyzer() {
           <p className="mt-4 text-sm font-semibold text-slate-900">
             {uploading
               ? 'Uploading, extracting text & indexing chunks…'
-              : 'Click to select a PDF or DOCX document'}
+              : 'Click to select a PDF, PPTX/PPT, or DOCX document'}
           </p>
           <p className="mt-1 text-xs text-slate-500">
             Maximum file size: 20 MB • Stored privately in your anonymous session

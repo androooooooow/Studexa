@@ -3,10 +3,12 @@ import uuid
 from fastapi import HTTPException, UploadFile, status
 from app.config import settings
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".ppt"}
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-powerpoint",
     "application/octet-stream",  # Some browsers send octet-stream; magic bytes are verified below
 }
 
@@ -34,22 +36,27 @@ def validate_upload_metadata(upload: UploadFile) -> tuple[str, str]:
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file extension. Only .pdf and .docx files are allowed.",
+            detail="Unsupported file extension. Only .pdf, .pptx, .ppt, and .docx files are allowed.",
         )
 
     content_type = (upload.content_type or "").lower().strip()
     if content_type and content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported MIME type '{content_type}'. Only PDF and DOCX documents are accepted.",
+            detail=f"Unsupported MIME type '{content_type}'. Only PDF, PPTX, and DOCX documents are accepted.",
         )
 
-    file_type = "pdf" if ext == ".pdf" else "docx"
+    if ext == ".pdf":
+        file_type = "pdf"
+    elif ext in {".pptx", ".ppt"}:
+        file_type = "pptx"
+    else:
+        file_type = "docx"
     return clean_name, file_type
 
 
 def validate_file_bytes(content: bytes, file_type: str) -> None:
-    """Validate file size limits and magic bytes for PDF and DOCX."""
+    """Validate file size limits and magic bytes for PDF, PPTX/PPT, and DOCX."""
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(content) == 0:
         raise HTTPException(
@@ -75,6 +82,13 @@ def validate_file_bytes(content: bytes, file_type: str) -> None:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid DOCX file header.",
             )
+    elif file_type == "pptx":
+        # PPTX is a ZIP archive (PK\x03\x04) and legacy PPT is OLE2 (\xd0\xcf\x11\xe0)
+        if not (content.startswith(b"PK\x03\x04") or content.startswith(b"\xd0\xcf\x11\xe0")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid PowerPoint (PPTX/PPT) file header.",
+            )
 
 
 def generate_safe_storage_path(file_type: str) -> tuple[str, Path]:
@@ -82,7 +96,8 @@ def generate_safe_storage_path(file_type: str) -> tuple[str, Path]:
     Generate a server-controlled UUID filename and verify path containment inside UPLOAD_DIR.
     Returns (stored_filename, resolved_path).
     """
-    ext = ".pdf" if file_type == "pdf" else ".docx"
+    ext_map = {"pdf": ".pdf", "docx": ".docx", "pptx": ".pptx"}
+    ext = ext_map.get(file_type, ".docx")
     stored_filename = f"{uuid.uuid4().hex}{ext}"
     upload_root = Path(settings.UPLOAD_DIR).resolve()
     upload_root.mkdir(parents=True, exist_ok=True)

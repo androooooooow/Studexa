@@ -14,6 +14,7 @@ from app.services.pdf_service import (
     SCANNED_PDF_MESSAGE,
     extract_text_from_docx_bytes,
     extract_text_from_pdf_bytes,
+    extract_text_from_pptx_bytes,
     split_text_into_chunks,
 )
 
@@ -49,6 +50,8 @@ async def process_and_store_document(
     try:
         if file_type == "pdf":
             extracted_text, extracted_status = extract_text_from_pdf_bytes(content)
+        elif file_type == "pptx":
+            extracted_text, extracted_status = extract_text_from_pptx_bytes(content)
         else:
             extracted_text, extracted_status = extract_text_from_docx_bytes(content)
     except Exception as exc:

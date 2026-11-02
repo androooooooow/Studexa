@@ -15,14 +15,21 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import JobQueuePanel from '../components/jobs/JobQueuePanel';
 import { useSession } from '../hooks/useSession';
 
 const QUICK_TOOLS = [
   {
+    to: '/reviewer',
+    title: 'AI Reviewer Maker',
+    description: 'Convert PDF or PPT slides into structured reviewers with one-click PDF export.',
+    icon: Sparkles,
+    accent: 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white',
+    actionLabel: 'Create Reviewer',
+  },
+  {
     to: '/documents',
-    title: 'PDF & DOCX Analyzer',
-    description: 'Upload lecture notes or chapters to extract and index text.',
+    title: 'PDF & PPTX Analyzer',
+    description: 'Upload lecture slides, notes, or chapters to extract and index text.',
     icon: FileText,
     accent: 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white',
     actionLabel: 'Manage Documents',
@@ -240,9 +247,6 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
-
-      {/* Live AI Request Queue Panel */}
-      <JobQueuePanel />
 
       {/* Productivity & Progress Shortcuts */}
       <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs">

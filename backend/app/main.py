@@ -11,6 +11,7 @@ from app.api.jobs import router as jobs_router
 from app.api.planner import router as planner_router
 from app.api.progress import router as progress_router
 from app.api.quizzes import router as quizzes_router
+from app.api.reviewers import router as reviewers_router
 from app.api.sessions import router as sessions_router
 from app.api.summaries import router as summaries_router
 from app.api.tutor import router as tutor_router
@@ -67,6 +68,7 @@ app.include_router(sessions_router)
 app.include_router(documents_router)
 app.include_router(jobs_router)
 app.include_router(summaries_router)
+app.include_router(reviewers_router)
 app.include_router(quizzes_router)
 app.include_router(flashcards_router)
 app.include_router(tutor_router)
