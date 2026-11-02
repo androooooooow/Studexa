@@ -1,0 +1,18 @@
+[Unit]
+Description=StudyMate AI FastAPI Backend (Single Worker)
+After=network.target ollama.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/studymate/repo/backend
+EnvironmentFile=/opt/studymate/repo/backend/.env
+ExecStart=/opt/studymate/repo/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

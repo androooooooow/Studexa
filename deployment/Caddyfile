@@ -1,0 +1,13 @@
+YOUR-API-DOMAIN {
+    encode gzip
+
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        -Server
+    }
+
+    reverse_proxy 127.0.0.1:8000
+}

@@ -1,0 +1,79 @@
+from contextlib import asynccontextmanager
+import logging
+import aiosqlite
+from fastapi import Depends, FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.sessions import router as sessions_router
+from app.config import settings
+from app.database import get_db, init_db
+from app.security.sessions import utc_now
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting %s in %s mode", settings.APP_NAME, settings.ENVIRONMENT)
+    await init_db()
+    yield
+    logger.info("Shutting down %s", settings.APP_NAME)
+
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    version="1.0.0",
+    description="Public anonymous AI study assistant backend powered by local Ollama (gemma3:1b).",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Session-Token", "Authorization"],
+)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    return response
+
+
+app.include_router(sessions_router)
+
+
+@app.get("/api/health", tags=["health"])
+async def health_check(db: aiosqlite.Connection = Depends(get_db)):
+    """Check API health, SQLite connectivity, and configured AI queue settings."""
+    cursor = await db.execute("SELECT 1 AS ok")
+    row = await cursor.fetchone()
+    db_ok = bool(row and row["ok"] == 1)
+
+    q_cursor = await db.execute(
+        "SELECT COUNT(*) AS cnt FROM ai_jobs WHERE status IN ('queued', 'processing')"
+    )
+    q_row = await q_cursor.fetchone()
+    active_or_queued = q_row["cnt"] if q_row else 0
+
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "app_name": settings.APP_NAME,
+        "environment": settings.ENVIRONMENT,
+        "database": "connected" if db_ok else "error",
+        "ai_model": settings.OLLAMA_MODEL,
+        "ai_max_concurrent": settings.AI_MAX_CONCURRENT,
+        "ai_max_queue": settings.AI_MAX_QUEUE,
+        "ai_queue_depth": active_or_queued,
+        "timestamp": utc_now().isoformat(),
+    }
