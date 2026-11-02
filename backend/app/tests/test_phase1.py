@@ -2,6 +2,7 @@ from datetime import timedelta
 import aiosqlite
 from httpx import ASGITransport, AsyncClient
 import pytest
+import pytest_asyncio
 from app.config import settings
 from app.database import init_db
 from app.main import app
@@ -9,7 +10,7 @@ from app.security.rate_limit import session_action_limiter, session_create_limit
 from app.security.sessions import hash_session_token, to_iso, utc_now
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def setup_test_environment(tmp_path, monkeypatch):
     """Isolate each test with a temporary SQLite database and reset rate limiters."""
     db_file = tmp_path / "test_studymate.db"

@@ -9,7 +9,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 20000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -56,4 +56,58 @@ export async function initializeOrRestoreSession() {
     }
   }
   return await createAnonymousSession();
+}
+
+/* ==================== PHASE 2: DOCUMENTS ==================== */
+
+export async function uploadDocument(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await apiClient.post('/api/documents/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    timeout: 60000,
+  });
+  return response.data;
+}
+
+export async function fetchDocuments() {
+  const response = await apiClient.get('/api/documents');
+  return response.data.documents || [];
+}
+
+export async function fetchDocumentDetail(documentId) {
+  const response = await apiClient.get(`/api/documents/${documentId}`);
+  return response.data;
+}
+
+export async function deleteDocument(documentId) {
+  await apiClient.delete(`/api/documents/${documentId}`);
+}
+
+/* ==================== PHASE 3: AI JOB QUEUE ==================== */
+
+export async function createAIJob({ job_type, document_id = null, prompt = '', options = {} }) {
+  const response = await apiClient.post('/api/ai/jobs', {
+    job_type,
+    document_id,
+    prompt,
+    options,
+  });
+  return response.data;
+}
+
+export async function fetchAIJobs() {
+  const response = await apiClient.get('/api/ai/jobs');
+  return response.data;
+}
+
+export async function fetchAIJob(jobId) {
+  const response = await apiClient.get(`/api/ai/jobs/${jobId}`);
+  return response.data;
+}
+
+export async function cancelAIJob(jobId) {
+  await apiClient.delete(`/api/ai/jobs/${jobId}`);
 }

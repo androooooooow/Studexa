@@ -3,10 +3,13 @@ import logging
 import aiosqlite
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.documents import router as documents_router
+from app.api.jobs import router as jobs_router
 from app.api.sessions import router as sessions_router
 from app.config import settings
 from app.database import get_db, init_db
 from app.security.sessions import utc_now
+from app.workers.ai_worker import ai_worker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,7 +22,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting %s in %s mode", settings.APP_NAME, settings.ENVIRONMENT)
     await init_db()
+    await ai_worker.start()
     yield
+    await ai_worker.stop()
     logger.info("Shutting down %s", settings.APP_NAME)
 
 
@@ -51,6 +56,8 @@ async def add_security_headers(request: Request, call_next):
 
 
 app.include_router(sessions_router)
+app.include_router(documents_router)
+app.include_router(jobs_router)
 
 
 @app.get("/api/health", tags=["health"])
