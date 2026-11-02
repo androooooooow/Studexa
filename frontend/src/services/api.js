@@ -111,3 +111,174 @@ export async function fetchAIJob(jobId) {
 export async function cancelAIJob(jobId) {
   await apiClient.delete(`/api/ai/jobs/${jobId}`);
 }
+
+export async function pollJobUntilDone(jobId, onTick = null, maxWaitMs = 150000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    const job = await fetchAIJob(jobId);
+    if (onTick) onTick(job);
+    if (job.status === 'completed') {
+      return job;
+    }
+    if (job.status === 'failed') {
+      throw new Error(job.error_message || 'AI job failed.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+  }
+  throw new Error('Timed out waiting for AI job in queue.');
+}
+
+/* ==================== PHASE 4: STUDY TOOLS ==================== */
+
+export async function generateSummary({ document_id, style = 'medium' }) {
+  const response = await apiClient.post('/api/summaries/generate', {
+    document_id,
+    style,
+  });
+  return response.data;
+}
+
+export async function fetchSummaries() {
+  const response = await apiClient.get('/api/summaries');
+  return response.data || [];
+}
+
+export async function generateQuiz({ document_id, question_count = 5, difficulty = 'medium' }) {
+  const response = await apiClient.post('/api/quizzes/generate', {
+    document_id,
+    question_count,
+    difficulty,
+  });
+  return response.data;
+}
+
+export async function fetchQuizzes(includeAnswers = false) {
+  const response = await apiClient.get('/api/quizzes', {
+    params: { include_answers: includeAnswers },
+  });
+  return response.data || [];
+}
+
+export async function submitQuiz(quizId, answers) {
+  const response = await apiClient.post(`/api/quizzes/${quizId}/submit`, {
+    answers,
+  });
+  return response.data;
+}
+
+export async function generateFlashcards({ document_id, card_count = 8 }) {
+  const response = await apiClient.post('/api/flashcards/generate', {
+    document_id,
+    card_count,
+  });
+  return response.data;
+}
+
+export async function fetchFlashcardDecks() {
+  const response = await apiClient.get('/api/flashcards');
+  return response.data || [];
+}
+
+export async function sendTutorQuestion({ document_id, question, conversation_id = null }) {
+  const response = await apiClient.post('/api/tutor/chat', {
+    document_id,
+    question,
+    conversation_id,
+  });
+  return response.data;
+}
+
+export async function fetchTutorConversations() {
+  const response = await apiClient.get('/api/tutor/conversations');
+  return response.data || [];
+}
+
+export async function fetchTutorConversationDetail(conversationId) {
+  const response = await apiClient.get(`/api/tutor/conversations/${conversationId}`);
+  return response.data;
+}
+
+export async function generateExam({ document_id, question_count = 10, difficulty = 'medium' }) {
+  const response = await apiClient.post('/api/exams/generate', {
+    document_id,
+    question_count,
+    difficulty,
+  });
+  return response.data;
+}
+
+export async function fetchExams() {
+  const response = await apiClient.get('/api/exams');
+  return response.data || [];
+}
+
+export async function submitExam(examId, answers) {
+  const response = await apiClient.post(`/api/exams/${examId}/submit`, {
+    answers,
+  });
+  return response.data;
+}
+
+export async function fetchExamAttempts() {
+  const response = await apiClient.get('/api/exams/attempts');
+  return response.data || [];
+}
+
+/* ==================== PHASE 5: PRODUCTIVITY & EXPORTS ==================== */
+
+export async function fetchPlannerTasks() {
+  const response = await apiClient.get('/api/planner/tasks');
+  return response.data.tasks || [];
+}
+
+export async function createPlannerTask({ title, description = '', due_date = '' }) {
+  const response = await apiClient.post('/api/planner/tasks', {
+    title,
+    description: description || null,
+    due_date: due_date || null,
+  });
+  return response.data;
+}
+
+export async function updatePlannerTask(taskId, patch) {
+  const response = await apiClient.patch(`/api/planner/tasks/${taskId}`, patch);
+  return response.data;
+}
+
+export async function deletePlannerTask(taskId) {
+  await apiClient.delete(`/api/planner/tasks/${taskId}`);
+}
+
+export async function fetchProgressOverview() {
+  const response = await apiClient.get('/api/progress/overview');
+  return response.data;
+}
+
+export async function fetchProgressActivity() {
+  const response = await apiClient.get('/api/progress/activity');
+  return response.data.activities || [];
+}
+
+export async function fetchLibraryMaterials() {
+  const response = await apiClient.get('/api/exports');
+  return response.data.materials || [];
+}
+
+export async function deleteLibraryMaterial(materialId) {
+  await apiClient.delete(`/api/exports/${materialId}`);
+}
+
+export async function downloadMaterialPdf(materialId, fallbackFilename = 'study_material.pdf') {
+  const response = await apiClient.get(`/api/exports/${materialId}`, {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fallbackFilename.endsWith('.pdf') ? fallbackFilename : `${fallbackFilename}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}

@@ -1,2 +1,1 @@
-/* Placeholder for AI job queue components (Phase 3) */
-export {};
+export { default as JobQueuePanel } from './JobQueuePanel';

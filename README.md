@@ -5,49 +5,40 @@ StudyMate AI is a public, free-to-use AI study assistant web application. Studen
 ## Architecture Highlights
 - **Frontend**: React 19, Vite, Tailwind CSS, Axios, React Router (hosted on Vercel Hobby plan)
 - **Backend**: Python, FastAPI, Uvicorn (`--workers 1`), Pydantic Settings, SQLite + `aiosqlite`
-- **Retrieval**: SQLite FTS5 full-text search (lightweight, zero external vector DB)
+- **Retrieval**: SQLite FTS5 full-text search (`document_chunks_fts` with BM25 ranking; lightweight, zero external vector DB)
 - **AI Engine**: Local Ollama running `gemma3:1b` (`127.0.0.1:11434`), serialized via a persistent SQLite FIFO job queue (max 1 active AI job globally, max 10 queued)
 - **Anonymous Sessions**: Cryptographically random 256-bit token generated per browser; only its `SHA-256` hash is stored in SQLite
 
 ## Implementation Status
 - **Phase 1 (Foundation)**: Completed & Tested
-  - Repository structure (`frontend/`, `backend/`, `deployment/`)
-  - FastAPI `/api/health`, `POST /api/session`, and `GET /api/session/me`
-  - SQLite database schema initialization (all 11 tables including `document_chunks_fts` FTS5 virtual table and sync triggers)
-  - Cryptographic anonymous session creation, SHA-256 token hashing, TTL expiration, and rate limiting
-  - React + Vite + Tailwind frontend with `LandingPage`, `Dashboard`, live backend/session synchronization, and routed views
-- **Phase 2 (Documents)**: Pending approval to start
-- **Phase 3 (AI Queue & Ollama)**: Pending
-- **Phase 4 (Study Tools)**: Pending
-- **Phase 5 (Productivity & Exports)**: Pending
+- **Phase 2 (Documents & SQLite FTS5 Retrieval)**: Completed & Tested
+  - `POST /api/documents/upload`, `GET /api/documents`, `GET /api/documents/{document_id}`, `DELETE /api/documents/{document_id}`
+  - Magic-byte, MIME-type, extension (`.pdf`, `.docx`), and 20 MB size validation + path traversal protection
+  - Text extraction via `PyMuPDF` and `python-docx`, scanned/image-only PDF detection with OCR notice, chunking, and SQLite FTS5 indexing
+- **Phase 3 (AI Queue & Local Ollama `gemma3:1b`)**: Completed & Tested
+  - `POST /api/ai/jobs`, `GET /api/ai/jobs`, `GET /api/ai/jobs/{job_id}`, `DELETE /api/ai/jobs/{job_id}`
+  - Single-worker FIFO SQLite queue (`AI_MAX_CONCURRENT=1`, `AI_MAX_QUEUE=10`), startup recovery of stranded `processing` jobs, failure/timeout isolation, and live frontend polling via `JobQueuePanel`
+- **Phase 4 (Study Tools — Summarizer, Quizzes, Flashcards, Tutor, Exam Simulation)**: Next phase
+- **Phase 5 (Productivity — Study Planner, Progress Tracker, Study Library, PDF Export)**: Pending
 - **Phase 6 (Security & Quality Hardening)**: Pending
 - **Phase 7 (Deployment)**: Pending
 
 ## Running Locally
 
 ### 1. Backend (FastAPI)
-```bash
+```powershell
 cd backend
-python -m venv .venv
-# Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# Linux/macOS:
-# source .venv/bin/activate
-
-pip install -r requirements.txt
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+.\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 ### 2. Run Backend Tests
-```bash
-cd backend
-.\.venv\Scripts\pytest -v
+```powershell
+.\backend\.venv\Scripts\python.exe -m pytest -v
 ```
 
 ### 3. Frontend (React + Vite)
-```bash
+```powershell
 cd frontend
-npm install
 npm run dev
 ```
 Open `http://localhost:5173`. Vite proxies `/api` requests to `http://127.0.0.1:8000` in development.
