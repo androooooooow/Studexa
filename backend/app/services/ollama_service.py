@@ -72,6 +72,22 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
         raise
 
 
+LANGUAGE_SYSTEM_INSTRUCTION = (
+    "CRITICAL LANGUAGE ENFORCEMENT: All responses, questions, options, summaries, reviewers, and explanations "
+    "MUST be written exclusively in English or Tagalog/Filipino. "
+    "NEVER generate Spanish (Español), French, or any other language under any circumstance. "
+    "Strictly avoid Spanish words (such as 'de', 'la', 'el', 'como', 'para', 'es', 'opción', 'cuenta', 'también', etc.). "
+    "If the source material contains non-English/non-Tagalog terms, explain them in English or Tagalog only."
+)
+
+
+def sanitize_language_output(text: str) -> str:
+    """Strip Spanish-specific punctuation (¿, ¡) and enforce clean English/Tagalog formatting."""
+    if not text:
+        return ""
+    return text.replace("¿", "").replace("¡", "").strip()
+
+
 async def generate_with_ollama(
     prompt: str,
     system_prompt: Optional[str] = None,
@@ -81,23 +97,29 @@ async def generate_with_ollama(
     """
     Send a single generation request to local Ollama (127.0.0.1:11434) running gemma3:1b.
     The caller (ai_worker) guarantees at most 1 concurrent call globally.
+    Enforces English or Tagalog strictly; forbids Spanish.
     """
     base_url = settings.OLLAMA_BASE_URL.rstrip("/")
     url = f"{base_url}/api/generate"
 
+    effective_system = (
+        f"{system_prompt}\n\n{LANGUAGE_SYSTEM_INSTRUCTION}"
+        if system_prompt
+        else LANGUAGE_SYSTEM_INSTRUCTION
+    )
+
     payload: Dict[str, Any] = {
         "model": settings.OLLAMA_MODEL,
-        "prompt": prompt,
+        "prompt": f"{prompt}\n\nReminder: Output strictly in English or Tagalog only. No Spanish words.",
         "stream": False,
         "options": {
             "temperature": 0.3,
             "top_p": 0.9,
-            "repeat_penalty": 1.2,
+            "repeat_penalty": 1.25,
             "num_predict": 4096,
         },
     }
-    if system_prompt:
-        payload["system"] = system_prompt
+    payload["system"] = effective_system
     if expect_json:
         payload["format"] = "json"
 
@@ -137,7 +159,7 @@ async def generate_with_ollama(
     if not output_text:
         raise OllamaGenerationError("Ollama returned an empty response.")
 
-    return output_text
+    return sanitize_language_output(output_text)
 
 
 async def generate_and_validate_json(
@@ -203,7 +225,10 @@ async def build_bounded_source_context(
         (document_id, session_id),
     )
     doc_row = await doc_cur.fetchone()
-    doc_name = doc_row["original_filename"] if doc_row else "Study Document"
+    if doc_row:
+        doc_name = doc_row["original_filename"] if hasattr(doc_row, "keys") else doc_row[0]
+    else:
+        doc_name = "Study Document"
 
     chunks = await retrieve_relevant_chunks(
         db=db,

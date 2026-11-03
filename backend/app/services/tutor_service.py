@@ -234,6 +234,8 @@ async def handle_tutor_job(
 
     system_prompt = (
         "You are StudyMate AI Accountancy Study Tutor. "
+        "STRICT LANGUAGE DIRECTIVE: Output MUST be exclusively in English or Tagalog/Filipino. "
+        "NEVER generate Spanish words (Español), French words, or any other language under any circumstance. "
         "STRICT DOMAIN RULE: You ONLY answer questions related to Accountancy, Accounting, Auditing, Taxation, "
         "Management Advisory Services (MAS), Regulatory Framework for Business Transactions (RFBT), Financial Management, "
         "Bookkeeping, CPA Licensure Exam preparation, or the student's uploaded Accountancy study material. "
