@@ -49,4 +49,4 @@ Thumbs.db
 .agent
 promo-video
 .agents/
-Dockerfile
+.env.example
