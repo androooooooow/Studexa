@@ -15,7 +15,10 @@ MAX_PROMPT_SOURCE_CHARS = 5500
 
 
 class OllamaGenerationError(Exception):
-    """Raised when local Ollama fails or returns an unrecoverable malformed response."""
+    """Raised when Ollama or Cloudflare Workers AI fails or returns an unrecoverable malformed response."""
+
+
+AIGenerationError = OllamaGenerationError
 
 
 def _salvage_truncated_json_array(text: str) -> Optional[Dict[str, Any]]:
@@ -141,7 +144,7 @@ def sanitize_language_output(text: str) -> str:
     return text.replace("¿", "").replace("¡", "").strip()
 
 
-async def generate_with_ollama(
+async def _generate_with_local_ollama(
     prompt: str,
     system_prompt: Optional[str] = None,
     expect_json: bool = False,
@@ -149,7 +152,7 @@ async def generate_with_ollama(
 ) -> str:
     """
     Send a single generation request to local Ollama (127.0.0.1:11434) running gemma3:1b.
-    The caller (ai_worker) guarantees at most 1 concurrent call globally.
+    The caller (ai_worker) guarantees concurrency limits globally.
     Enforces English or Tagalog strictly; forbids Spanish.
     """
     combined_system = LANGUAGE_SYSTEM_INSTRUCTION
@@ -191,6 +194,124 @@ async def generate_with_ollama(
         raise OllamaGenerationError("Ollama returned an empty response.")
 
     return sanitize_language_output(output_text)
+
+
+async def generate_with_cloudflare(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    expect_json: bool = False,
+    timeout_seconds: float = 120.0,
+) -> str:
+    """
+    Send an inference request to Cloudflare Workers AI running Google Gemma (e.g. @cf/google/gemma-7b-it).
+    Enforces English or Tagalog strictly; forbids Spanish.
+    """
+    account_id = settings.CLOUDFLARE_ACCOUNT_ID
+    api_token = settings.CLOUDFLARE_API_TOKEN
+    model = settings.CLOUDFLARE_MODEL or "@cf/google/gemma-7b-it"
+
+    if not account_id or not api_token:
+        raise OllamaGenerationError(
+            "Cloudflare Workers AI is configured as AI provider, but CLOUDFLARE_ACCOUNT_ID "
+            "or CLOUDFLARE_API_TOKEN is not set. Please set them in your environment variables."
+        )
+
+    combined_system = LANGUAGE_SYSTEM_INSTRUCTION
+    if system_prompt:
+        combined_system = f"{LANGUAGE_SYSTEM_INSTRUCTION}\n\n{system_prompt}"
+
+    if expect_json:
+        combined_system += (
+            "\n\nCRITICAL JSON DIRECTIVE: You MUST output strictly a raw, parseable JSON object. "
+            "Do NOT wrap in markdown fences (```json). Do NOT add conversational text or markdown before or after."
+        )
+
+    endpoint = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+    payload: Dict[str, Any] = {
+        "messages": [
+            {"role": "system", "content": combined_system},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 4096,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            response = await client.post(endpoint, headers=headers, json=payload)
+    except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        logger.error("Failed to connect to Cloudflare Workers AI: %s", exc)
+        raise OllamaGenerationError(
+            f"Cannot reach Cloudflare Workers AI: {exc}"
+        ) from exc
+
+    try:
+        data = response.json()
+    except Exception:
+        raise OllamaGenerationError(
+            f"Cloudflare Workers AI returned invalid response format (HTTP {response.status_code}): {response.text[:300]}"
+        )
+
+    if response.status_code != 200 or not data.get("success", True):
+        errors = data.get("errors", [])
+        err_detail = (
+            "; ".join(str(e.get("message", e)) if isinstance(e, dict) else str(e) for e in errors)
+            if errors
+            else response.text[:300]
+        )
+        raise OllamaGenerationError(
+            f"Cloudflare Workers AI error (HTTP {response.status_code}): {err_detail}"
+        )
+
+    result = data.get("result", {})
+    if isinstance(result, dict):
+        output_text = (
+            result.get("response")
+            or result.get("text")
+            or result.get("description")
+            or ""
+        )
+    elif isinstance(result, str):
+        output_text = result
+    else:
+        output_text = str(result or "")
+
+    output_text = output_text.strip()
+    if not output_text:
+        raise OllamaGenerationError("Cloudflare Workers AI returned an empty response.")
+
+    return sanitize_language_output(output_text)
+
+
+async def generate_with_ollama(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    expect_json: bool = False,
+    timeout_seconds: float = 180.0,
+) -> str:
+    """
+    Route AI generation to the configured provider (Cloudflare Workers AI Gemma or local Ollama).
+    """
+    if settings.active_ai_provider == "cloudflare":
+        return await generate_with_cloudflare(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            expect_json=expect_json,
+            timeout_seconds=timeout_seconds,
+        )
+    return await _generate_with_local_ollama(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        expect_json=expect_json,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+generate_text = generate_with_ollama
 
 
 async def generate_and_validate_json(

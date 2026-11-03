@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
-    description="Public anonymous AI study assistant backend powered by local Ollama (gemma3:1b).",
+    description="Study assistant backend powered by Google Gemma on Cloudflare Workers AI and local Ollama.",
     lifespan=lifespan,
 )
 
@@ -96,7 +96,8 @@ async def health_check(db: aiosqlite.Connection = Depends(get_db)):
         "app_name": settings.APP_NAME,
         "environment": settings.ENVIRONMENT,
         "database": "connected" if db_ok else "error",
-        "ai_model": settings.OLLAMA_MODEL,
+        "ai_provider": settings.active_ai_provider,
+        "ai_model": settings.active_ai_model,
         "ai_max_concurrent": settings.AI_MAX_CONCURRENT,
         "ai_max_queue": settings.AI_MAX_QUEUE,
         "ai_queue_depth": active_or_queued,

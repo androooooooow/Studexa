@@ -13,8 +13,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     OLLAMA_MODEL: str = "gemma3:1b"
-    AI_MAX_CONCURRENT: int = 1
-    AI_MAX_QUEUE: int = 10
+    AI_PROVIDER: str = "ollama"  # "cloudflare" or "ollama"
+    CLOUDFLARE_ACCOUNT_ID: str = ""
+    CLOUDFLARE_API_TOKEN: str = ""
+    CLOUDFLARE_MODEL: str = "@cf/google/gemma-7b-it"
+    AI_MAX_CONCURRENT: int = 2
+    AI_MAX_QUEUE: int = 20
     DATABASE_URL: str = f"sqlite:///{(DEFAULT_STORAGE_DIR / 'database' / 'studymate.db').as_posix()}"
     UPLOAD_DIR: str = str(DEFAULT_STORAGE_DIR / "uploads")
     GENERATED_DIR: str = str(DEFAULT_STORAGE_DIR / "generated")
@@ -45,7 +49,26 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> List[str]:
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        raw = self.CORS_ORIGINS or ""
+        if raw.strip() == "*":
+            return ["*"]
+        origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return origins if origins else ["*"]
+
+    @property
+    def active_ai_provider(self) -> str:
+        prov = (self.AI_PROVIDER or "").lower().strip()
+        if prov == "cloudflare":
+            return "cloudflare"
+        if bool(self.CLOUDFLARE_ACCOUNT_ID and self.CLOUDFLARE_API_TOKEN):
+            return "cloudflare"
+        return "ollama"
+
+    @property
+    def active_ai_model(self) -> str:
+        if self.active_ai_provider == "cloudflare":
+            return self.CLOUDFLARE_MODEL or "@cf/google/gemma-7b-it"
+        return self.OLLAMA_MODEL
 
 
 settings = Settings()

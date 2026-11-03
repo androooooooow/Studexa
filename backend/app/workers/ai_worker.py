@@ -99,7 +99,7 @@ async def _default_execute_job(
         "document_id": document_id,
         "source_chunks_used": chunk_refs,
         "content": response_text,
-        "model": settings.OLLAMA_MODEL,
+        "model": settings.active_ai_model,
     }
 
 

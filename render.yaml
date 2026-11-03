@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: studexa-backend
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_NAME
+        value: Studexa AI
+      - key: AI_PROVIDER
+        value: cloudflare
+      - key: CLOUDFLARE_MODEL
+        value: "@cf/google/gemma-7b-it"
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        value: "https://*.vercel.app,http://localhost:5173"
+      - key: DATABASE_URL
+        value: "sqlite:////opt/studymate/storage/database/studymate.db"
+      - key: UPLOAD_DIR
+        value: "/opt/studymate/storage/uploads"
+      - key: GENERATED_DIR
+        value: "/opt/studymate/storage/generated"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "20"
+      - key: SESSION_TTL_DAYS
+        value: "30"
+      - key: AI_MAX_CONCURRENT
+        value: "2"
+      - key: AI_MAX_QUEUE
+        value: "20"
+    disk:
+      name: studexa-storage
+      mountPath: /opt/studymate/storage
+      sizeGB: 1
