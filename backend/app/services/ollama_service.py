@@ -11,7 +11,7 @@ from app.services.retrieval_service import retrieve_relevant_chunks
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
-MAX_PROMPT_SOURCE_CHARS = 4500
+MAX_PROMPT_SOURCE_CHARS = 5500
 
 
 class OllamaGenerationError(Exception):
@@ -20,15 +20,13 @@ class OllamaGenerationError(Exception):
 
 def _salvage_truncated_json_array(text: str) -> Optional[Dict[str, Any]]:
     """
-    If an LLM response containing a list of objects (e.g. {"questions": [ {...}, {...}, {"question": "truncated...)
-    was cut off mid-generation, salvage all complete {...} objects before the cutoff.
+    If an LLM response containing a list of objects was cut off mid-generation,
+    salvage all complete {...} objects before the cutoff.
     """
     first_brace = text.find("{")
     if first_brace == -1:
         return None
     sub = text[first_brace:]
-    # Find the last closing brace of a complete array item '},' or '}' before the end
-    # Try progressively earlier '}' positions from the right and close with ']}'
     pos = len(sub)
     attempts = 0
     while pos > 0 and attempts < 40:
@@ -48,10 +46,43 @@ def _salvage_truncated_json_array(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def repair_raw_json_string(text: str) -> str:
+    """
+    Apply progressive heuristics to fix common LLM JSON syntax issues:
+    - Strips markdown fences
+    - Strips line/block comments
+    - Replaces Python literals (True, False, None)
+    - Adds quotes around unquoted object keys (e.g. { title: ... })
+    - Removes trailing commas before } or ]
+    """
+    cleaned = (text or "").strip()
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL)
+    if fence_match:
+        cleaned = fence_match.group(1).strip()
+    else:
+        first_brace = cleaned.find("{")
+        last_brace = cleaned.rfind("}")
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            cleaned = cleaned[first_brace : last_brace + 1]
+
+    # Remove single-line JS comments
+    cleaned = re.sub(r"//.*$", "", cleaned, flags=re.MULTILINE)
+    # Replace Python literals
+    cleaned = re.sub(r"\bTrue\b", "true", cleaned)
+    cleaned = re.sub(r"\bFalse\b", "false", cleaned)
+    cleaned = re.sub(r"\bNone\b", "null", cleaned)
+    # Quote unquoted property names: { title: ... } or , subtitle: ...
+    cleaned = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', cleaned)
+    # Remove trailing commas before closing braces or brackets
+    cleaned = re.sub(r",\s*([\]\}])", r"\1", cleaned)
+
+    return cleaned
+
+
 def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
     """
     Extract and parse a JSON object from LLM output, stripping markdown code fences if present,
-    and salvaging truncated JSON arrays when token limits are reached.
+    repairing unquoted keys or trailing commas, and salvaging truncated JSON arrays.
     """
     cleaned = (raw_text or "").strip()
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL)
@@ -63,13 +94,35 @@ def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
         if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
             cleaned = cleaned[first_brace : last_brace + 1]
 
+    # 1. Try direct standard json.loads
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        salvaged = _salvage_truncated_json_array(raw_text or "")
-        if salvaged is not None:
-            return salvaged
-        raise
+        pass
+
+    # 2. Try progressive heuristic repair (unquoted keys, trailing commas, python literals)
+    try:
+        repaired = repair_raw_json_string(raw_text or "")
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        pass
+
+    # 3. Try salvaging truncated JSON array
+    salvaged = _salvage_truncated_json_array(raw_text or "")
+    if salvaged is not None:
+        return salvaged
+
+    # 4. Try salvaging after repair
+    try:
+        repaired = repair_raw_json_string(raw_text or "")
+        salvaged_rep = _salvage_truncated_json_array(repaired)
+        if salvaged_rep is not None:
+            return salvaged_rep
+    except Exception:
+        pass
+
+    # Re-raise standard JSONDecodeError if completely unrecoverable
+    return json.loads(cleaned)
 
 
 LANGUAGE_SYSTEM_INSTRUCTION = (
@@ -99,53 +152,31 @@ async def generate_with_ollama(
     The caller (ai_worker) guarantees at most 1 concurrent call globally.
     Enforces English or Tagalog strictly; forbids Spanish.
     """
-    base_url = settings.OLLAMA_BASE_URL.rstrip("/")
-    url = f"{base_url}/api/generate"
-
-    effective_system = (
-        f"{system_prompt}\n\n{LANGUAGE_SYSTEM_INSTRUCTION}"
-        if system_prompt
-        else LANGUAGE_SYSTEM_INSTRUCTION
-    )
+    combined_system = LANGUAGE_SYSTEM_INSTRUCTION
+    if system_prompt:
+        combined_system = f"{LANGUAGE_SYSTEM_INSTRUCTION}\n\n{system_prompt}"
 
     payload: Dict[str, Any] = {
         "model": settings.OLLAMA_MODEL,
-        "prompt": f"{prompt}\n\nReminder: Output strictly in English or Tagalog only. No Spanish words.",
+        "prompt": prompt,
+        "system": combined_system,
         "stream": False,
         "options": {
-            "temperature": 0.3,
-            "top_p": 0.9,
-            "repeat_penalty": 1.25,
-            "num_predict": 4096,
+            "temperature": 0.2,
+            "top_p": 0.85,
         },
     }
-    payload["system"] = effective_system
     if expect_json:
         payload["format"] = "json"
 
+    endpoint = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate"
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(url, json=payload)
-            # If Ollama's JSON grammar sampler hits a token repeat limit on gemma3:1b,
-            # automatically retry once without strict format='json' and higher temperature.
-            if response.status_code == 500 and "repeat limit" in response.text.lower():
-                retry_payload = dict(payload)
-                retry_payload.pop("format", None)
-                retry_payload["options"] = {
-                    "temperature": 0.45,
-                    "top_p": 0.92,
-                    "repeat_penalty": 1.3,
-                    "num_predict": 1800,
-                }
-                response = await client.post(url, json=retry_payload)
-    except httpx.TimeoutException as exc:
+            response = await client.post(endpoint, json=payload)
+    except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        logger.error("Failed to connect to local Ollama: %s", exc)
         raise OllamaGenerationError(
-            "Local AI generation timed out. Please try a shorter prompt or smaller section."
-        ) from exc
-    except httpx.RequestError as exc:
-        raise OllamaGenerationError(
-            f"Could not connect to local Ollama service at {base_url}. "
-            f"Ensure Ollama is running locally and '{settings.OLLAMA_MODEL}' is pulled."
+            f"Cannot reach local Ollama at {settings.OLLAMA_BASE_URL}. Ensure Ollama is running."
         ) from exc
 
     if response.status_code != 200:
@@ -191,18 +222,24 @@ async def generate_and_validate_json(
     repair_prompt = (
         "Your previous response was not valid JSON matching the required schema.\n"
         f"Required JSON schema structure:\n{schema_hint}\n\n"
-        f"Previous invalid output:\n{raw_output[:2000]}\n\n"
-        "Return ONLY valid JSON matching the required schema structure and nothing else."
+        f"Previous output:\n{raw_output[:2500]}\n\n"
+        "Return ONLY valid JSON matching the required schema structure and nothing else. "
+        "Enclose ALL property names and string values in double quotes. Do not use trailing commas."
     )
     repaired_raw = await generate_with_ollama(
         prompt=repair_prompt,
-        system_prompt="You are a strict JSON repair assistant. Output only valid JSON.",
+        system_prompt=(
+            f"{LANGUAGE_SYSTEM_INSTRUCTION}\n"
+            "You are a strict JSON repair assistant. Output ONLY valid, parseable JSON. "
+            "Never output comments or unquoted keys."
+        ),
         expect_json=True,
     )
     try:
         repaired_parsed = extract_json_from_text(repaired_raw)
         return schema_model.model_validate(repaired_parsed)
     except (json.JSONDecodeError, ValidationError, ValueError) as second_err:
+        logger.warning("Controlled repair failed (%s). Raising OllamaGenerationError.", second_err)
         raise OllamaGenerationError(
             f"Model output did not match required JSON format after 1 repair attempt: {second_err}"
         ) from second_err
@@ -213,12 +250,12 @@ async def build_bounded_source_context(
     session_id: str,
     document_id: str,
     query: str = "",
-    max_chunks: int = 6,
+    max_chunks: int = 12,
     max_chars: int = MAX_PROMPT_SOURCE_CHARS,
 ) -> tuple[str, List[int], str]:
     """
     Retrieve relevant chunks from SQLite FTS5 for (session_id, document_id) and bound total text length.
-    Returns (excerpts_text, chunk_numbers_1_based, document_filename).
+    Formats chunks as clean, academic sections without internal confusing tags.
     """
     doc_cur = await db.execute(
         "SELECT original_filename FROM documents WHERE id = ? AND session_id = ?",
@@ -251,7 +288,8 @@ async def build_bounded_source_context(
         if remaining <= 0:
             break
         snippet = text[:remaining]
-        parts.append(f"[Chunk #{idx_1}]\n{snippet}")
+        # Clean section header rather than confusing "Chunk"
+        parts.append(f"--- Section {idx_1} ---\n{snippet}")
         chunk_refs.append(idx_1)
         used_chars += len(snippet)
 

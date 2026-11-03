@@ -220,8 +220,8 @@ export default function Summarizer() {
                   </span>
                   {selectedSummary.source_chunks_used?.length > 0 && (
                     <span className="text-xs font-medium text-slate-500">
-                      Grounded in Chunks:{' '}
-                      {selectedSummary.source_chunks_used.map((c) => `#${c}`).join(', ')}
+                      Verified Sections:{' '}
+                      {selectedSummary.source_chunks_used.map((c) => `§${c}`).join(', ')}
                     </span>
                   )}
                 </div>

@@ -32,6 +32,7 @@ async def generate_quiz_endpoint(
         "options": {
             "question_count": body.question_count,
             "difficulty": body.difficulty,
+            "question_type": getattr(body, "question_type", "mixed"),
         },
     }
     job = await enqueue_ai_job(

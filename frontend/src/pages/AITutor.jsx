@@ -363,10 +363,10 @@ export default function AITutor() {
                           <span>{msg.metadata.knowledge_label}</span>
                         </span>
                         {msg.metadata.cited_chunks?.length > 0 && (
-                          <span className="font-mono text-[10px] font-medium text-slate-500">
-                            Chunks:{' '}
+                          <span className="text-[10px] font-medium text-slate-500">
+                            Citations:{' '}
                             {msg.metadata.cited_chunks
-                              .map((c) => `#${c}`)
+                              .map((c) => `§${c}`)
                               .join(', ')}
                           </span>
                         )}

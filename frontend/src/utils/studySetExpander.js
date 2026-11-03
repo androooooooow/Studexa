@@ -85,19 +85,19 @@ export async function ensureExactMCQCount(material, targetCount, documentId, kin
     correct_index: typeof q.correct_index === 'number' ? q.correct_index : 0,
     explanation:
       q.explanation ||
-      `Grounded in Chunk #${q.chunk_ref || 1} of the uploaded study document.`,
+      'Grounded in the core principles of the uploaded study document.',
   }));
 
   const usedQuestions = new Set(fullQuestions.map((q) => (q.question || '').toLowerCase()));
   const templates = [
-    (c, topic) =>
-      `According to Chunk #${c}, which of the following statements is accurate regarding ${topic}?`,
-    (c, topic) =>
-      `Based on the uploaded reviewer (Chunk #${c}), what is stated about ${topic}?`,
-    (c, topic) =>
-      `Which key concept from Chunk #${c} best describes ${topic}?`,
-    (c, topic) =>
-      `In the context of Chunk #${c}, identify the true statement concerning ${topic}:`,
+    (_c, topic) =>
+      `Which of the following statements is accurate regarding ${topic}?`,
+    (_c, topic) =>
+      `Based on the uploaded study material, what is stated about ${topic}?`,
+    (_c, topic) =>
+      `Which key concept best describes ${topic}?`,
+    (_c, topic) =>
+      `In the context of the course notes, identify the true statement concerning ${topic}:`,
   ];
 
   let sIdx = 0;
@@ -142,7 +142,7 @@ export async function ensureExactMCQCount(material, targetCount, documentId, kin
       question: qText,
       options: options.slice(0, 4),
       correct_index: correctPos,
-      explanation: `Directly stated in Chunk #${item.chunkNum}: ${correctAns}`,
+      explanation: `Directly supported by the course material: ${correctAns}`,
       chunk_ref: item.chunkNum,
     });
   }
@@ -298,9 +298,9 @@ export async function ensureExactFlashcardCount(deck, targetCount, documentId) {
       .map((w) => w.replace(/[^a-zA-Z0-9-]/g, ''))
       .filter((w) => w.length > 3);
     const topic = words.slice(0, 5).join(' ') || 'Key Concept';
-    let qText = `What does Chunk #${item.chunkNum} explain regarding ${topic}?`;
+    let qText = `What is the core takeaway regarding ${topic}?`;
     if (usedQ.has(qText.toLowerCase())) {
-      qText = `Card #${fullCards.length + 1} (Chunk #${item.chunkNum}): ${topic}?`;
+      qText = `Study Concept #${fullCards.length + 1}: ${topic}?`;
     }
     usedQ.add(qText.toLowerCase());
     fullCards.push({

@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
   Award,
+  Calculator,
   CheckCircle2,
   Download,
-  GraduationCap,
+  HelpCircle,
+  ListOrdered,
   Loader2,
   XCircle,
 } from 'lucide-react';
@@ -25,10 +27,20 @@ import {
   hydrateExpandedMCQList,
 } from '../utils/studySetExpander';
 
+const QUESTION_FORMATS = [
+  { id: 'mixed', label: 'All Types (Mixed)' },
+  { id: 'multiple_choice', label: 'Multiple Choice' },
+  { id: 'true_false', label: 'True or False' },
+  { id: 'identification', label: 'Identification' },
+  { id: 'enumeration', label: 'Enumeration' },
+  { id: 'solving', label: 'Solving / Math' },
+];
+
 export default function ExamSimulation() {
   const { activeDocumentId, refreshSession } = useSession();
   const [questionCount, setQuestionCount] = useState(20);
   const [difficulty, setDifficulty] = useState('medium');
+  const [questionType, setQuestionType] = useState('mixed');
   const [exams, setExams] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [activeExam, setActiveExam] = useState(null);
@@ -74,6 +86,7 @@ export default function ExamSimulation() {
         document_id: activeDocumentId,
         question_count: questionCount,
         difficulty,
+        question_type: questionType,
       });
       setJobState(job);
       let completedJob;
@@ -85,6 +98,7 @@ export default function ExamSimulation() {
             document_id: activeDocumentId,
             question_count: 5,
             difficulty,
+            question_type: questionType,
           });
           setJobState(job);
           completedJob = await pollJobUntilDone(job.id, (u) => setJobState(u));
@@ -99,6 +113,7 @@ export default function ExamSimulation() {
           document_id: res.document_id || activeDocumentId,
           title: res.title || `Practice Exam (${questionCount} Qs)`,
           difficulty: res.difficulty || difficulty,
+          question_type: res.question_type || questionType,
           question_count: res.question_count || res.questions.length,
           questions: res.questions,
           created_at: res.created_at || new Date().toISOString(),
@@ -112,18 +127,15 @@ export default function ExamSimulation() {
         handleSelectExam(expandedImmediate);
         setExams((prev) => [
           expandedImmediate,
-          ...prev.filter((ex) => ex.id !== expandedImmediate.id),
+          ...prev.filter((e) => e.id !== expandedImmediate.id),
         ]);
       }
 
-      const [rawExamList, attemptList] = await Promise.all([
-        fetchExams(),
-        fetchExamAttempts(),
-      ]);
-      if (rawExamList.length > 0) {
+      const rawUpdated = await fetchExams();
+      if (rawUpdated.length > 0) {
         const targetRaw =
-          (res?.material_id && rawExamList.find((ex) => ex.id === res.material_id)) ||
-          rawExamList[0];
+          (res?.material_id && rawUpdated.find((e) => e.id === res.material_id)) ||
+          rawUpdated[0];
         if (targetRaw && targetRaw.questions?.length < questionCount) {
           await ensureExactMCQCount(
             targetRaw,
@@ -132,17 +144,16 @@ export default function ExamSimulation() {
             'Exam'
           );
         }
-        const examList = hydrateExpandedMCQList(rawExamList);
-        setExams(examList);
+        const hydrated = hydrateExpandedMCQList(rawUpdated);
+        setExams(hydrated);
         const matched =
-          (res?.material_id && examList.find((ex) => ex.id === res.material_id)) ||
-          examList[0];
+          (res?.material_id && hydrated.find((e) => e.id === res.material_id)) ||
+          hydrated[0];
         handleSelectExam(matched);
       }
-      setAttempts(attemptList);
       await refreshSession();
     } catch (err) {
-      setError(formatApiError(err, 'Could not generate exam.'));
+      setError(formatApiError(err, 'Failed to generate practice exam.'));
     } finally {
       setJobState(null);
     }
@@ -187,6 +198,26 @@ export default function ExamSimulation() {
 
           <div className="mt-5">
             <SourceDocumentSelector />
+          </div>
+
+          <div className="mt-5">
+            <label className="block text-xs font-semibold text-slate-700">Question Format</label>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {QUESTION_FORMATS.map((fmt) => (
+                <button
+                  key={fmt.id}
+                  type="button"
+                  onClick={() => setQuestionType(fmt.id)}
+                  className={`rounded-xl border p-2 text-left text-xs font-semibold transition ${
+                    questionType === fmt.id
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {fmt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="mt-5">
@@ -248,65 +279,35 @@ export default function ExamSimulation() {
                 <span>
                   {jobState.status === 'queued'
                     ? `Queued (#${jobState.queue_position || 1})…`
-                    : 'Generating Exam…'}
+                    : 'Generating Exam Simulation…'}
                 </span>
               </>
             ) : (
               <>
-                <GraduationCap className="h-4 w-4" />
-                <span>Generate Practice Exam</span>
+                <Award className="h-4 w-4" />
+                <span>Generate {questionCount}-Question Exam</span>
               </>
             )}
           </button>
         </div>
 
-        {/* Saved Exams */}
-        {exams.length > 0 && (
-          <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
-            <h3 className="font-display text-sm font-bold text-slate-900">
-              Practice Exams ({exams.length})
-            </h3>
-            <div className="mt-3 space-y-2">
-              {exams.map((ex) => (
-                <button
-                  key={ex.id}
-                  type="button"
-                  onClick={() => handleSelectExam(ex)}
-                  className={`flex w-full flex-col items-start rounded-xl border p-3 text-left transition ${
-                    activeExam?.id === ex.id
-                      ? 'border-indigo-600 bg-indigo-50/50'
-                      : 'border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="line-clamp-1 text-xs font-bold text-slate-900">
-                    {ex.title}
-                  </span>
-                  <span className="mt-0.5 text-[11px] text-slate-500">
-                    {ex.question_count} questions • {ex.difficulty}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Recent Graded Attempts */}
         {attempts.length > 0 && (
           <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
-            <h3 className="font-display text-sm font-bold text-slate-900">
-              Recorded Attempts ({attempts.length})
-            </h3>
+            <h3 className="font-display text-sm font-bold text-slate-900">Past Attempts</h3>
             <div className="mt-3 space-y-2">
               {attempts.slice(0, 5).map((att) => (
                 <div
-                  key={att.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2 text-xs"
+                  key={att.attempt_id}
+                  className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-xs"
                 >
-                  <span className="truncate font-medium text-slate-700">
-                    {att.exam_title}
-                  </span>
-                  <span className="ml-2 shrink-0 font-bold text-indigo-700">
-                    {att.score}/{att.total_questions} ({att.percentage}%)
+                  <div>
+                    <span className="font-bold text-slate-900">{att.percentage}%</span>
+                    <span className="ml-1 text-[11px] text-slate-500">
+                      ({att.score}/{att.total_questions})
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {new Date(att.created_at).toLocaleDateString()}
                   </span>
                 </div>
               ))}
@@ -315,7 +316,7 @@ export default function ExamSimulation() {
         )}
       </div>
 
-      {/* Right Exam Sheet & Attempt Review */}
+      {/* Right Exam Simulation Area */}
       <div className="lg:col-span-8">
         {!activeExam ? (
           <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-2xl border border-slate-200/90 bg-white p-8 text-center shadow-2xs">
@@ -326,8 +327,7 @@ export default function ExamSimulation() {
               Exam Simulation &amp; Attempt Review
             </h3>
             <p className="mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
-              Generate a practice exam from your uploaded document. Your answers are graded by
-              deterministic backend Python code and saved to your session progress.
+              Generate a practice exam from your uploaded document. Choose from Multiple Choice, True/False, Identification, Enumeration, or Solving questions.
             </p>
           </div>
         ) : (
@@ -338,8 +338,7 @@ export default function ExamSimulation() {
                   {activeExam.title}
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Answered {Object.keys(selectedAnswers).length} of {activeExam.question_count}{' '}
-                  questions
+                  Answered {Object.keys(selectedAnswers).length} of {activeExam.question_count} questions
                 </p>
               </div>
               <button
@@ -386,59 +385,159 @@ export default function ExamSimulation() {
                 const qIndex = q.question_index ?? idx;
                 const chosen = selectedAnswers[String(qIndex)];
                 const isGraded = Boolean(gradeResult);
+                const qType = q.question_type || 'multiple_choice';
 
                 return (
                   <div
                     key={qIndex}
                     className="rounded-2xl border border-slate-200/90 bg-slate-50/50 p-5"
                   >
-                    <p className="text-sm font-bold text-slate-900">
-                      Question {qIndex + 1}. {q.question}
-                    </p>
-
-                    <div className="mt-3.5 space-y-2">
-                      {(q.options || []).map((opt, optIdx) => {
-                        const isSelected = chosen === optIdx;
-                        const isCorrect = isGraded && q.correct_index === optIdx;
-                        const isWrong = isGraded && isSelected && q.correct_index !== optIdx;
-
-                        let cls = 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50';
-                        if (!isGraded && isSelected) {
-                          cls =
-                            'border-indigo-600 bg-indigo-50/80 text-indigo-900 ring-1 ring-indigo-600';
-                        } else if (isGraded && isCorrect) {
-                          cls = 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold';
-                        } else if (isGraded && isWrong) {
-                          cls = 'border-red-400 bg-red-50 text-red-900';
-                        }
-
-                        return (
-                          <button
-                            key={optIdx}
-                            type="button"
-                            disabled={isGraded}
-                            onClick={() =>
-                              setSelectedAnswers((prev) => ({
-                                ...prev,
-                                [String(qIndex)]: optIdx,
-                              }))
-                            }
-                            className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-left text-xs transition ${cls}`}
-                          >
-                            <span>
-                              <strong className="mr-2">{String.fromCharCode(65 + optIdx)}.</strong>
-                              {opt}
-                            </span>
-                            {isGraded && isCorrect && (
-                              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                            )}
-                            {isGraded && isWrong && (
-                              <XCircle className="h-4 w-4 shrink-0 text-red-600" />
-                            )}
-                          </button>
-                        );
-                      })}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="inline-block rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-800">
+                          {qType.replace('_', ' ')}
+                        </span>
+                        <p className="mt-1.5 text-sm font-bold text-slate-900">
+                          Question {qIndex + 1}. {q.question}
+                        </p>
+                      </div>
                     </div>
+
+                    {/* Format 1 & 2: Multiple Choice and True/False */}
+                    {(qType === 'multiple_choice' || qType === 'true_false') && (
+                      <div className="mt-3.5 space-y-2">
+                        {(q.options || (qType === 'true_false' ? ['True', 'False'] : [])).map((opt, optIdx) => {
+                          const isSelected = chosen === optIdx || chosen === opt;
+                          const isCorrect = isGraded && q.correct_index === optIdx;
+                          const isWrong = isGraded && isSelected && q.correct_index !== optIdx;
+
+                          let cls = 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50';
+                          if (!isGraded && isSelected) {
+                            cls =
+                              'border-indigo-600 bg-indigo-50/80 text-indigo-900 ring-1 ring-indigo-600';
+                          } else if (isGraded && isCorrect) {
+                            cls = 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold';
+                          } else if (isGraded && isWrong) {
+                            cls = 'border-red-400 bg-red-50 text-red-900';
+                          }
+
+                          return (
+                            <button
+                              key={optIdx}
+                              type="button"
+                              disabled={isGraded}
+                              onClick={() =>
+                                setSelectedAnswers((prev) => ({
+                                  ...prev,
+                                  [String(qIndex)]: optIdx,
+                                }))
+                              }
+                              className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-left text-xs transition ${cls}`}
+                            >
+                              <span>
+                                {qType === 'multiple_choice' && (
+                                  <strong className="mr-2">{String.fromCharCode(65 + optIdx)}.</strong>
+                                )}
+                                {opt}
+                              </span>
+                              {isGraded && isCorrect && (
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                              )}
+                              {isGraded && isWrong && (
+                                <XCircle className="h-4 w-4 shrink-0 text-red-600" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Format 3: Identification */}
+                    {qType === 'identification' && (
+                      <div className="mt-3.5 space-y-2">
+                        <input
+                          type="text"
+                          disabled={isGraded}
+                          value={selectedAnswers[String(qIndex)] || ''}
+                          onChange={(e) =>
+                            setSelectedAnswers((prev) => ({
+                              ...prev,
+                              [String(qIndex)]: e.target.value,
+                            }))
+                          }
+                          placeholder="Type the exact term or principle here..."
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
+                        />
+                        {isGraded && (
+                          <div className={`mt-2 rounded-xl border p-3 text-xs ${
+                            q.is_correct ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'
+                          }`}>
+                            <p><strong>Your Answer:</strong> {q.user_answer || '(Blank)'}</p>
+                            <p className="mt-0.5"><strong>Correct Answer:</strong> {q.correct_answer}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Format 4: Enumeration */}
+                    {qType === 'enumeration' && (
+                      <div className="mt-3.5 space-y-2">
+                        <textarea
+                          rows={3}
+                          disabled={isGraded}
+                          value={selectedAnswers[String(qIndex)] || ''}
+                          onChange={(e) =>
+                            setSelectedAnswers((prev) => ({
+                              ...prev,
+                              [String(qIndex)]: e.target.value,
+                            }))
+                          }
+                          placeholder="List the required items separated by commas or new lines..."
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
+                        />
+                        {isGraded && (
+                          <div className={`mt-2 rounded-xl border p-3 text-xs ${
+                            q.is_correct ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'
+                          }`}>
+                            <p><strong>Your Answer:</strong> {q.user_answer || '(Blank)'}</p>
+                            <p className="mt-0.5"><strong>Expected Items:</strong> {q.correct_answer}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Format 5: Solving / Computation */}
+                    {qType === 'solving' && (
+                      <div className="mt-3.5 space-y-2">
+                        {q.formula && (
+                          <div className="flex items-center gap-2 rounded-xl bg-blue-50 px-3.5 py-2 text-xs font-semibold text-blue-900">
+                            <Calculator className="h-4 w-4 shrink-0 text-blue-600" />
+                            <span>Formula: {q.formula}</span>
+                          </div>
+                        )}
+                        <input
+                          type="text"
+                          disabled={isGraded}
+                          value={selectedAnswers[String(qIndex)] || ''}
+                          onChange={(e) =>
+                            setSelectedAnswers((prev) => ({
+                              ...prev,
+                              [String(qIndex)]: e.target.value,
+                            }))
+                          }
+                          placeholder="Enter your calculated numerical or symbolic answer..."
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
+                        />
+                        {isGraded && (
+                          <div className={`mt-2 rounded-xl border p-3 text-xs ${
+                            q.is_correct ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'
+                          }`}>
+                            <p><strong>Your Answer:</strong> {q.user_answer || '(Blank)'}</p>
+                            <p className="mt-0.5"><strong>Correct Numerical Solution:</strong> {q.correct_answer}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {isGraded && q.explanation && (
                       <div className="mt-3.5 rounded-xl border border-slate-200 bg-white p-3.5 text-xs text-slate-700">
@@ -459,7 +558,7 @@ export default function ExamSimulation() {
                   disabled={submitting}
                   className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  {submitting ? 'Grading Exam…' : 'Submit Exam for Grading'}
+                  {submitting ? 'Submitting & Grading…' : 'Submit Exam Simulation'}
                 </button>
               </div>
             )}

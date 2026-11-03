@@ -228,12 +228,13 @@ export async function fetchReviewers() {
   }
 }
 
-export async function generateQuiz({ document_id, question_count = 20, difficulty = 'medium' }) {
+export async function generateQuiz({ document_id, question_count = 20, difficulty = 'medium', question_type = 'mixed' }) {
   try {
     const response = await apiClient.post('/api/quizzes/generate', {
       document_id,
       question_count,
       difficulty,
+      question_type,
     });
     return response.data;
   } catch (err) {
@@ -242,6 +243,7 @@ export async function generateQuiz({ document_id, question_count = 20, difficult
         document_id,
         question_count: 5,
         difficulty,
+        question_type,
       });
       return response.data;
     }
@@ -306,12 +308,13 @@ export async function fetchTutorConversationDetail(conversationId) {
   return response.data;
 }
 
-export async function generateExam({ document_id, question_count = 20, difficulty = 'medium' }) {
+export async function generateExam({ document_id, question_count = 20, difficulty = 'medium', question_type = 'mixed' }) {
   try {
     const response = await apiClient.post('/api/exams/generate', {
       document_id,
       question_count,
       difficulty,
+      question_type,
     });
     return response.data;
   } catch (err) {
@@ -320,6 +323,7 @@ export async function generateExam({ document_id, question_count = 20, difficult
         document_id,
         question_count: 5,
         difficulty,
+        question_type,
       });
       return response.data;
     }

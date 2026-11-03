@@ -314,8 +314,8 @@ export default function Flashcards() {
                 {flipped ? 'Answer' : 'Question'}
               </span>
               {currentCard.chunk_ref && (
-                <span className="rounded-md bg-white/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-500">
-                  Chunk #{currentCard.chunk_ref}
+                <span className="rounded-md bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                  Concept #{currentCard.chunk_ref}
                 </span>
               )}
             </div>

@@ -64,7 +64,7 @@ export default function SourceDocumentSelector({
         handleSelectChange(uploaded.id);
         setActiveDocumentId(uploaded.id);
         setUploadMsg(
-          `Uploaded & selected "${uploaded.original_filename}" (${uploaded.chunk_count} chunks)`
+          `Uploaded & selected "${uploaded.original_filename}"`
         );
       } else {
         setUploadErr(
@@ -144,7 +144,7 @@ export default function SourceDocumentSelector({
           {allowNone && <option value="">{noneLabel}</option>}
           {readyDocs.map((doc) => (
             <option key={doc.id} value={doc.id}>
-              {doc.original_filename} ({doc.chunk_count} chunks)
+              {doc.original_filename}
             </option>
           ))}
         </select>
