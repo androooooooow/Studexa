@@ -1,4 +1,5 @@
-# StudyMate AI
+# Studexa
+
 
 StudyMate AI is a public, free-to-use AI study assistant web application. Students can upload course materials (PDF and DOCX), generate summaries, quizzes, flashcards, and practice exams, and ask questions through an AI tutor—all isolated per anonymous browser session without any signup or login.
 
