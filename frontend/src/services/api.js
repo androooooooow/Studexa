@@ -9,7 +9,7 @@ import {
   extractTextFromPptxFile,
 } from '../utils/pptxClientConverter';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -76,7 +76,7 @@ export async function initializeOrRestoreSession() {
       setStoredSession(existingToken, sessionData.session_id);
       return sessionData;
     } catch (error) {
-      if (error.response && error.response.status === 401) {
+      if (error.response && [401, 404, 405].includes(error.response.status)) {
         clearStoredSession();
       } else {
         throw error;

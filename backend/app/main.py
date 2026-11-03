@@ -79,6 +79,9 @@ app.include_router(exports_router)
 
 
 @app.get("/api/health", tags=["health"])
+@app.get("/api/health/", tags=["health"], include_in_schema=False)
+@app.get("/health", tags=["health"])
+@app.get("/health/", tags=["health"], include_in_schema=False)
 async def health_check(db: aiosqlite.Connection = Depends(get_db)):
     """Check API health, SQLite connectivity, and configured AI queue settings."""
     cursor = await db.execute("SELECT 1 AS ok")

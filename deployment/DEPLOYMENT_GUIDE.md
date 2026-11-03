@@ -113,7 +113,8 @@ Cloudflare Workers AI provides serverless GPU inference for open-weights models,
 4. In **Environment Variables**, add:
    | Name | Value |
    |---|---|
-   | `   ` | `https://<your-render-app>.onrender.com` |
+   | `VITE_API_BASE_URL` | `https://<your-render-app>.onrender.com` |
+   | `VITE_API_URL` | `https://<your-render-app>.onrender.com` |
    *(Do NOT include a trailing slash in `VITE_API_BASE_URL`)*
 5. Click **Deploy**.
 
