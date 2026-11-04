@@ -94,7 +94,7 @@ def _salvage_truncated_json_array(text: Any) -> Optional[Dict[str, Any]]:
         for suffix in ("}", "]}", "]}}"):
             candidate = sub[: idx + 1] + suffix
             try:
-                parsed = json.loads(candidate)
+                parsed = json.loads(candidate, strict=False)
                 if isinstance(parsed, dict):
                     return parsed
             except json.JSONDecodeError:
@@ -155,16 +155,16 @@ def extract_json_from_text(raw_text: Any) -> Dict[str, Any]:
         if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
             cleaned = cleaned[first_brace : last_brace + 1]
 
-    # 1. Try direct standard json.loads
+    # 1. Try direct standard json.loads (strict=False allows literal newlines inside strings)
     try:
-        return json.loads(cleaned)
+        return json.loads(cleaned, strict=False)
     except json.JSONDecodeError:
         pass
 
     # 2. Try progressive heuristic repair (unquoted keys, trailing commas, python literals)
     try:
         repaired = repair_raw_json_string(raw_text or "")
-        return json.loads(repaired)
+        return json.loads(repaired, strict=False)
     except json.JSONDecodeError:
         pass
 
@@ -183,7 +183,7 @@ def extract_json_from_text(raw_text: Any) -> Dict[str, Any]:
         pass
 
     # Re-raise standard JSONDecodeError if completely unrecoverable
-    return json.loads(cleaned)
+    return json.loads(cleaned, strict=False)
 
 
 LANGUAGE_SYSTEM_INSTRUCTION = (
@@ -390,9 +390,11 @@ async def generate_and_validate_json(
         )
 
     repair_prompt = (
-        "Your previous response was not valid JSON matching the required schema.\n"
+        "Convert the following academic content into a valid JSON object matching the required schema.\n"
+        "IMPORTANT: Preserve the actual academic explanations, facts, and questions from the content below—"
+        "do NOT copy placeholder example strings from the schema template.\n\n"
+        f"Content to format as JSON:\n{raw_output[:2500]}\n\n"
         f"Required JSON schema structure:\n{schema_hint}\n\n"
-        f"Previous output:\n{raw_output[:2500]}\n\n"
         "Return ONLY valid JSON matching the required schema structure and nothing else. "
         "Enclose ALL property names and string values in double quotes. Do not use trailing commas."
     )
