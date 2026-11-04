@@ -289,11 +289,14 @@ export async function fetchFlashcardDecks() {
   return response.data || [];
 }
 
-export async function sendTutorQuestion({ document_id, question, conversation_id = null }) {
+export async function sendTutorQuestion({ document_id = null, question, conversation_id = null }) {
+  // Standalone Accountancy Mode: never send undefined/'' — normalize to null.
+  const cleanDocId =
+    typeof document_id === 'string' && document_id.trim() ? document_id.trim() : null;
   const response = await apiClient.post('/api/tutor/chat', {
-    document_id,
+    document_id: cleanDocId,
     question,
-    conversation_id,
+    conversation_id: conversation_id || null,
   });
   return response.data;
 }

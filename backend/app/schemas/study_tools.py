@@ -1,6 +1,6 @@
 import re
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _coerce_chunk_ref(val: Any) -> Optional[int]:
@@ -359,9 +359,20 @@ class TutorLLMOutput(BaseModel):
 
 
 class TutorChatRequest(BaseModel):
-    document_id: str
+    # Optional: None / "" / omitted => Standalone Accountancy Mode (No PDF required)
+    document_id: Optional[str] = None
     question: str = Field(..., min_length=2, max_length=1500)
     conversation_id: Optional[str] = None
+
+    @field_validator("document_id", "conversation_id", mode="before")
+    @classmethod
+    def _blank_to_none(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return v
 
 
 class TutorMessageItem(BaseModel):
