@@ -21,11 +21,65 @@ class OllamaGenerationError(Exception):
 AIGenerationError = OllamaGenerationError
 
 
-def _salvage_truncated_json_array(text: str) -> Optional[Dict[str, Any]]:
+def extract_cf_response(data: Any) -> str:
+    """
+    Safely extract a string response from Cloudflare Workers AI or Ollama payloads.
+    Handles string results, nested {"result": {"response": ...}} dicts,
+    auto-parsed JSON dicts/lists inside "response", and OpenAI-compatible "choices".
+    """
+    if data is None:
+        return ""
+    if isinstance(data, str):
+        return data.strip()
+    if isinstance(data, dict):
+        # If data has "result", unpack it first
+        res = data.get("result", data)
+        if res is None:
+            return ""
+        if isinstance(res, str):
+            return res.strip()
+        if isinstance(res, dict):
+            for key in ("response", "text", "description", "output", "content"):
+                if key in res and res[key] is not None:
+                    val = res[key]
+                    if isinstance(val, str):
+                        return val.strip()
+                    if isinstance(val, dict):
+                        inner = val.get("response") or val.get("text")
+                        if isinstance(inner, str) and set(val.keys()) <= {"response", "text"}:
+                            return inner.strip()
+                        return json.dumps(val, ensure_ascii=False).strip()
+                    if isinstance(val, list):
+                        return json.dumps(val, ensure_ascii=False).strip()
+                    return str(val).strip()
+            choices = res.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                if isinstance(first, dict):
+                    msg = first.get("message") if isinstance(first.get("message"), dict) else first
+                    content = msg.get("content") if isinstance(msg, dict) else first.get("text")
+                    if isinstance(content, str):
+                        return content.strip()
+                    if isinstance(content, (dict, list)):
+                        return json.dumps(content, ensure_ascii=False).strip()
+            return json.dumps(res, ensure_ascii=False).strip()
+        if isinstance(res, list):
+            return json.dumps(res, ensure_ascii=False).strip()
+        return str(res).strip()
+    if isinstance(data, list):
+        return json.dumps(data, ensure_ascii=False).strip()
+    return str(data).strip()
+
+
+def _salvage_truncated_json_array(text: Any) -> Optional[Dict[str, Any]]:
     """
     If an LLM response containing a list of objects was cut off mid-generation,
     salvage all complete {...} objects before the cutoff.
     """
+    if isinstance(text, dict):
+        return text
+    if not isinstance(text, str):
+        text = str(text or "")
     first_brace = text.find("{")
     if first_brace == -1:
         return None
@@ -49,7 +103,7 @@ def _salvage_truncated_json_array(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def repair_raw_json_string(text: str) -> str:
+def repair_raw_json_string(text: Any) -> str:
     """
     Apply progressive heuristics to fix common LLM JSON syntax issues:
     - Strips markdown fences
@@ -58,7 +112,9 @@ def repair_raw_json_string(text: str) -> str:
     - Adds quotes around unquoted object keys (e.g. { title: ... })
     - Removes trailing commas before } or ]
     """
-    cleaned = (text or "").strip()
+    if isinstance(text, (dict, list)):
+        return json.dumps(text, ensure_ascii=False)
+    cleaned = str(text or "").strip()
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL)
     if fence_match:
         cleaned = fence_match.group(1).strip()
@@ -82,12 +138,14 @@ def repair_raw_json_string(text: str) -> str:
     return cleaned
 
 
-def extract_json_from_text(raw_text: str) -> Dict[str, Any]:
+def extract_json_from_text(raw_text: Any) -> Dict[str, Any]:
     """
     Extract and parse a JSON object from LLM output, stripping markdown code fences if present,
     repairing unquoted keys or trailing commas, and salvaging truncated JSON arrays.
     """
-    cleaned = (raw_text or "").strip()
+    if isinstance(raw_text, dict):
+        return raw_text
+    cleaned = str(raw_text or "").strip()
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL)
     if fence_match:
         cleaned = fence_match.group(1).strip()
@@ -137,10 +195,14 @@ LANGUAGE_SYSTEM_INSTRUCTION = (
 )
 
 
-def sanitize_language_output(text: str) -> str:
+def sanitize_language_output(text: Any) -> str:
     """Strip Spanish-specific punctuation (¿, ¡) and enforce clean English/Tagalog formatting."""
     if not text:
         return ""
+    if isinstance(text, (dict, list)):
+        text = json.dumps(text, ensure_ascii=False)
+    elif not isinstance(text, str):
+        text = str(text)
     return text.replace("¿", "").replace("¡", "").strip()
 
 
@@ -189,7 +251,7 @@ async def _generate_with_local_ollama(
         )
 
     data = response.json()
-    output_text = (data.get("response") or "").strip()
+    output_text = extract_cf_response(data)
     if not output_text:
         raise OllamaGenerationError("Ollama returned an empty response.")
 
@@ -267,20 +329,7 @@ async def generate_with_cloudflare(
             f"Cloudflare Workers AI error (HTTP {response.status_code}): {err_detail}"
         )
 
-    result = data.get("result", {})
-    if isinstance(result, dict):
-        output_text = (
-            result.get("response")
-            or result.get("text")
-            or result.get("description")
-            or ""
-        )
-    elif isinstance(result, str):
-        output_text = result
-    else:
-        output_text = str(result or "")
-
-    output_text = output_text.strip()
+    output_text = extract_cf_response(data)
     if not output_text:
         raise OllamaGenerationError("Cloudflare Workers AI returned an empty response.")
 

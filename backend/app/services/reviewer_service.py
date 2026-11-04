@@ -174,7 +174,7 @@ class ReviewerContentSchema(BaseModel):
                     if "memory_aids" in item and isinstance(item["memory_aids"], list):
                         for ma in item["memory_aids"]:
                             if isinstance(ma, dict):
-                                aid_str = ma.get("description") or ma.get("type") or ma.get("rule") or str(ma)
+                                aid_str = str(ma.get("description") or ma.get("type") or ma.get("rule") or ma)
                                 if aid_str.strip():
                                     collected_aids.append(aid_str.strip())
                             elif isinstance(ma, str) and ma.strip():
@@ -213,7 +213,7 @@ class ReviewerContentSchema(BaseModel):
         if isinstance(raw_aids, list):
             for a in raw_aids:
                 if isinstance(a, dict):
-                    aid_text = a.get("description") or a.get("type") or a.get("rule") or json.dumps(a)
+                    aid_text = str(a.get("description") or a.get("type") or a.get("rule") or json.dumps(a))
                     if aid_text.strip() and aid_text.strip().lower() != "formula:":
                         clean_aids.append(aid_text.strip())
                 elif isinstance(a, str) and a.strip() and a.strip().lower() != "formula:":

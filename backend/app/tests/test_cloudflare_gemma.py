@@ -5,9 +5,11 @@ import pytest
 from pydantic import BaseModel
 from app.config import settings
 from app.services import ollama_service
+from app.schemas.study_tools import TutorLLMOutput
 from app.services.ollama_service import (
     AIGenerationError,
     OllamaGenerationError,
+    extract_cf_response,
     generate_and_validate_json,
     generate_with_cloudflare,
     generate_with_ollama,
@@ -129,3 +131,53 @@ def test_cloudflare_json_structured_generation(monkeypatch):
 
     assert parsed.title == "Data Structures"
     assert len(parsed.key_points) == 3
+
+
+def test_extract_cf_response_handles_dict_and_string_variants(monkeypatch):
+    """Verify extract_cf_response and generate_and_validate_json handle dict responses without .strip() AttributeError."""
+    # 1. Standard nested dict with string response
+    assert extract_cf_response({"result": {"response": "  Hello World  "}, "success": True}) == "Hello World"
+    # 2. Direct string inside result
+    assert extract_cf_response({"result": "  Direct text  ", "success": True}) == "Direct text"
+    # 3. Auto-parsed JSON dict inside result.response (Cloudflare Workers AI JSON behavior)
+    nested_dict_payload = {
+        "result": {
+            "response": {
+                "answer": "Accrual accounting recognizes revenue when earned.",
+                "is_accountancy_related": True,
+                "source_grounded": False,
+                "knowledge_label": "General Accountancy Study Knowledge",
+                "cited_chunks": [],
+            }
+        },
+        "success": True,
+    }
+    extracted = extract_cf_response(nested_dict_payload)
+    assert isinstance(extracted, str)
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "cloudflare")
+    monkeypatch.setattr(settings, "CLOUDFLARE_ACCOUNT_ID", "acc_123")
+    monkeypatch.setattr(settings, "CLOUDFLARE_API_TOKEN", "tok_123")
+
+    class MockDictJsonResponse:
+        status_code = 200
+
+        def json(self):
+            return nested_dict_payload
+
+    async def mock_dict_post(self, url, headers=None, json=None, **kwargs):
+        return MockDictJsonResponse()
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_dict_post)
+
+    tutor_out = asyncio.run(
+        generate_and_validate_json(
+            prompt="Explain accrual accounting",
+            system_prompt="Study Tutor",
+            schema_model=TutorLLMOutput,
+            schema_hint='{"answer": "..."}',
+        )
+    )
+    assert tutor_out.answer == "Accrual accounting recognizes revenue when earned."
+    assert tutor_out.is_accountancy_related is True
+    assert tutor_out.source_grounded is False

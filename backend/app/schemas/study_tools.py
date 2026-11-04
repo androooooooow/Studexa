@@ -353,9 +353,55 @@ class ExamGenerateRequest(BaseModel):
 # -------------------- AI TUTOR --------------------
 class TutorLLMOutput(BaseModel):
     answer: str
+    is_accountancy_related: bool = True
     source_grounded: bool = True
     knowledge_label: str = "Grounded in uploaded document"
     cited_chunks: List[int] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_tutor_output(cls, data: Any) -> Any:
+        if isinstance(data, str):
+            return {"answer": data.strip()}
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        raw_ans = (
+            out.get("answer")
+            or out.get("response")
+            or out.get("explanation")
+            or out.get("text")
+            or ""
+        )
+        if isinstance(raw_ans, dict):
+            raw_ans = (
+                raw_ans.get("text")
+                or raw_ans.get("answer")
+                or raw_ans.get("response")
+                or str(raw_ans)
+            )
+        elif isinstance(raw_ans, list):
+            raw_ans = "\n".join(str(x).strip() for x in raw_ans if str(x).strip())
+        out["answer"] = str(raw_ans).strip()
+
+        for bool_field in ("is_accountancy_related", "source_grounded"):
+            if bool_field in out and not isinstance(out[bool_field], bool):
+                out[bool_field] = str(out[bool_field]).strip().lower() not in (
+                    "false",
+                    "0",
+                    "no",
+                )
+
+        if "knowledge_label" in out and out["knowledge_label"] is not None:
+            out["knowledge_label"] = str(out["knowledge_label"]).strip()
+
+        raw_chunks = out.get("cited_chunks")
+        if isinstance(raw_chunks, list):
+            coerced = [_coerce_chunk_ref(c) for c in raw_chunks]
+            out["cited_chunks"] = [c for c in coerced if c is not None]
+        else:
+            out["cited_chunks"] = []
+        return out
 
 
 class TutorChatRequest(BaseModel):
