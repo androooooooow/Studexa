@@ -234,6 +234,27 @@ async def delete_session_document(
         )
 
     stored_filename = row["stored_filename"]
+
+    # Unlink references in tutor_conversations and generated_materials
+    await db.execute(
+        "UPDATE tutor_conversations SET document_id = NULL WHERE document_id = ? AND session_id = ?",
+        (document_id, session_id),
+    )
+    await db.execute(
+        "UPDATE generated_materials SET document_id = NULL WHERE document_id = ? AND session_id = ?",
+        (document_id, session_id),
+    )
+
+    # Explicitly delete all document chunks and purge/rebuild the SQLite FTS5 virtual table
+    await db.execute(
+        "DELETE FROM document_chunks WHERE document_id = ? AND session_id = ?",
+        (document_id, session_id),
+    )
+    await db.execute(
+        "INSERT INTO document_chunks_fts(document_chunks_fts) VALUES('rebuild')"
+    )
+
+    # Delete the document record
     await db.execute(
         "DELETE FROM documents WHERE id = ? AND session_id = ?",
         (document_id, session_id),

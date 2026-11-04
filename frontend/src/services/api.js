@@ -137,7 +137,8 @@ export async function fetchDocumentDetail(documentId) {
 }
 
 export async function deleteDocument(documentId) {
-  await apiClient.delete(`/api/documents/${documentId}`);
+  const response = await apiClient.delete(`/api/documents/${documentId}`);
+  return response.data || { success: true, message: 'Document deleted successfully' };
 }
 
 /* ==================== PHASE 3: AI JOB QUEUE ==================== */

@@ -203,6 +203,15 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
         assert conv_detail["messages"][1]["metadata"]["source_grounded"] is True
 
         # 4b. AI Tutor WITHOUT uploaded PDF (Standalone Accountancy question)
+        captured_standalone_prompts = []
+        orig_gen = ollama_service.generate_with_ollama
+
+        async def spy_standalone_generate(prompt: str, system_prompt=None, expect_json=False, timeout_seconds=90.0) -> str:
+            captured_standalone_prompts.append(prompt)
+            return await orig_gen(prompt, system_prompt=system_prompt, expect_json=expect_json, timeout_seconds=timeout_seconds)
+
+        monkeypatch.setattr(ollama_service, "generate_with_ollama", spy_standalone_generate)
+
         standalone_tutor = await client.post(
             "/api/tutor/chat",
             json={
@@ -214,6 +223,11 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
         assert standalone_tutor.status_code == 202
         standalone_conv_id = standalone_tutor.json()["payload"]["options"]["conversation_id"]
         await ai_worker.process_one_job()
+
+        assert len(captured_standalone_prompts) == 1
+        assert "<SOURCE_EXCERPTS>" not in captured_standalone_prompts[0]
+        assert "Mitochondria" not in captured_standalone_prompts[0]
+        assert "Mode: Standalone Accountancy Study Tutor (no PDF uploaded)." in captured_standalone_prompts[0]
 
         standalone_detail = (
             await client.get(f"/api/tutor/conversations/{standalone_conv_id}", headers=headers)

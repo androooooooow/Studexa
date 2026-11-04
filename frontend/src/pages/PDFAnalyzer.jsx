@@ -32,6 +32,7 @@ export default function PDFAnalyzer() {
     documents,
     activeDocumentId,
     setActiveDocumentId,
+    removeDocumentFromState,
     syncDocuments,
     refreshSession,
   } = useSession();
@@ -99,17 +100,24 @@ export default function PDFAnalyzer() {
 
   const handleConfirmDelete = async () => {
     if (!confirmDeleteDoc) return;
-    setDeletingId(confirmDeleteDoc.id);
+    const targetDoc = confirmDeleteDoc;
+    setDeletingId(targetDoc.id);
     setUploadError(null);
+    setUploadSuccess(null);
     try {
-      await deleteDocument(confirmDeleteDoc.id);
-      if (activeDocumentId === confirmDeleteDoc.id) {
+      const res = await deleteDocument(targetDoc.id);
+      removeDocumentFromState(targetDoc.id);
+      if (activeDocumentId === targetDoc.id) {
         setActiveDocumentId('');
       }
-      if (inspectDoc?.id === confirmDeleteDoc.id) {
+      if (inspectDoc?.id === targetDoc.id) {
         setInspectDoc(null);
       }
       setConfirmDeleteDoc(null);
+      setUploadSuccess(
+        res?.message ||
+          `Deleted "${targetDoc.original_filename}" and removed from AI index.`
+      );
       await syncDocuments();
       await refreshSession();
     } catch (err) {
@@ -231,6 +239,16 @@ export default function PDFAnalyzer() {
               the AI Queue.
             </p>
           </div>
+          {activeDocumentId && (
+            <button
+              type="button"
+              onClick={() => setActiveDocumentId('')}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Clear Active Selection</span>
+            </button>
+          )}
         </div>
 
         {documents.length === 0 ? (
@@ -316,14 +334,16 @@ export default function PDFAnalyzer() {
                         <>
                           <button
                             type="button"
-                            onClick={() => setActiveDocumentId(doc.id)}
+                            onClick={() =>
+                              setActiveDocumentId(isSelected ? '' : doc.id)
+                            }
                             className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
                               isSelected
-                                ? 'bg-indigo-100 text-indigo-800'
+                                ? 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200/70'
                                 : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                             }`}
                           >
-                            {isSelected ? 'Selected Source' : 'Use as Source'}
+                            {isSelected ? 'Clear Selection' : 'Use as Source'}
                           </button>
 
                           <button
@@ -417,7 +437,7 @@ export default function PDFAnalyzer() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <h3 className="font-display text-base font-bold text-slate-900">
-              Delete Document?
+              Delete document and remove from AI index?
             </h3>
             <p className="mt-2 text-xs leading-relaxed text-slate-600">
               Are you sure you want to permanently remove{' '}

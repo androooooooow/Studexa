@@ -27,12 +27,12 @@ const SAMPLE_ACCOUNTANCY_QUESTIONS = [
 ];
 
 export default function AITutor() {
-  const { activeDocumentId, setActiveDocumentId, refreshSession } =
+  const { documents, activeDocumentId, setActiveDocumentId, refreshSession } =
     useSession();
 
-  // Allow '' for General Accountancy Tutor (no PDF required) or a document ID
-  const [selectedDocMode, setSelectedDocMode] = useState(
-    activeDocumentId || ''
+  // null represents General Accountancy Tutor (No PDF Required)
+  const [selectedDocumentId, setSelectedDocumentId] = useState(
+    activeDocumentId || null
   );
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
@@ -42,17 +42,28 @@ export default function AITutor() {
   const inputRef = useRef(null);
   const initialLoadedRef = useRef(false);
 
+  // Sync with activeDocumentId when it changes externally (or clears when deleted)
   useEffect(() => {
-    if (activeDocumentId && !selectedDocMode) {
-      setSelectedDocMode(activeDocumentId);
+    setSelectedDocumentId(activeDocumentId || null);
+  }, [activeDocumentId]);
+
+  // If the currently selected document was deleted from session documents, reset to null
+  useEffect(() => {
+    if (
+      selectedDocumentId &&
+      documents.length > 0 &&
+      !documents.some((d) => d.id === selectedDocumentId)
+    ) {
+      setSelectedDocumentId(null);
+    } else if (selectedDocumentId && documents.length === 0) {
+      setSelectedDocumentId(null);
     }
-  }, [activeDocumentId, selectedDocMode]);
+  }, [documents, selectedDocumentId]);
 
   const handleChangeDocMode = (val) => {
-    setSelectedDocMode(val);
-    if (val) {
-      setActiveDocumentId(val);
-    }
+    const cleanId = val && String(val).trim() ? String(val).trim() : null;
+    setSelectedDocumentId(cleanId);
+    setActiveDocumentId(cleanId || '');
   };
 
   const handleStartNewConversation = () => {
@@ -99,8 +110,13 @@ export default function AITutor() {
     setJobState({ status: 'queued', queue_position: 1 });
 
     try {
+      const effectiveDocId =
+        selectedDocumentId &&
+        documents.some((d) => d.id === selectedDocumentId)
+          ? selectedDocumentId
+          : null;
       const job = await sendTutorQuestion({
-        document_id: selectedDocMode || null,
+        document_id: effectiveDocId,
         question: trimmed,
         conversation_id: activeConversation?.id || null,
       });
@@ -159,7 +175,7 @@ export default function AITutor() {
               label="Knowledge Source (PDF Optional)"
               allowNone={true}
               noneLabel="General Accountancy Tutor (No PDF Required)"
-              valueOverride={selectedDocMode}
+              valueOverride={selectedDocumentId || ''}
               onChangeOverride={handleChangeDocMode}
             />
           </div>
@@ -270,7 +286,7 @@ export default function AITutor() {
                   : 'New Accountancy Conversation'}
               </p>
               <p className="text-[11px] text-slate-500">
-                {selectedDocMode
+                {selectedDocumentId
                   ? 'Grounded in selected PDF/DOCX + Accountancy Rules'
                   : 'Standalone Accountancy Mode (No PDF required)'}
               </p>
@@ -416,7 +432,7 @@ export default function AITutor() {
               onChange={(e) => setQuestion(e.target.value)}
               disabled={Boolean(jobState)}
               placeholder={
-                selectedDocMode
+                selectedDocumentId
                   ? 'Ask an Accountancy question about your selected document…'
                   : 'Ask any Accountancy study question (FAR, AFAR, Auditing, Tax, MAS, RFBT)…'
               }

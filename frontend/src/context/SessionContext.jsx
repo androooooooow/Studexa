@@ -11,6 +11,7 @@ import { clearStoredSession } from '../services/session';
 export const SessionContext = createContext(null);
 
 const ACTIVE_DOC_KEY = 'studymate_active_document_id';
+const ACTIVE_DOC_CLEARED_KEY = 'studymate_active_document_cleared';
 
 export function SessionProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -20,6 +21,9 @@ export function SessionProvider({ children }) {
   const [error, setError] = useState(null);
   const [activeDocumentId, setActiveDocumentIdState] = useState(() => {
     try {
+      if (sessionStorage.getItem(ACTIVE_DOC_CLEARED_KEY) === '1') {
+        return '';
+      }
       return sessionStorage.getItem(ACTIVE_DOC_KEY) || '';
     } catch {
       return '';
@@ -27,16 +31,36 @@ export function SessionProvider({ children }) {
   });
 
   const setActiveDocumentId = useCallback((docId) => {
-    setActiveDocumentIdState(docId || '');
+    const cleanId = typeof docId === 'string' ? docId.trim() : '';
+    setActiveDocumentIdState(cleanId);
     try {
-      if (docId) {
-        sessionStorage.setItem(ACTIVE_DOC_KEY, docId);
+      if (cleanId) {
+        sessionStorage.setItem(ACTIVE_DOC_KEY, cleanId);
+        sessionStorage.removeItem(ACTIVE_DOC_CLEARED_KEY);
       } else {
         sessionStorage.removeItem(ACTIVE_DOC_KEY);
+        sessionStorage.setItem(ACTIVE_DOC_CLEARED_KEY, '1');
       }
     } catch {
       // Ignore storage errors
     }
+  }, []);
+
+  const removeDocumentFromState = useCallback((docId) => {
+    if (!docId) return;
+    setDocuments((prev) => prev.filter((d) => d.id !== docId));
+    setActiveDocumentIdState((prevId) => {
+      if (prevId === docId) {
+        try {
+          sessionStorage.removeItem(ACTIVE_DOC_KEY);
+          sessionStorage.setItem(ACTIVE_DOC_CLEARED_KEY, '1');
+        } catch {
+          // Ignore
+        }
+        return '';
+      }
+      return prevId;
+    });
   }, []);
 
   const syncDocuments = useCallback(
@@ -45,10 +69,30 @@ export function SessionProvider({ children }) {
         const docs = await fetchDocuments();
         setDocuments(docs);
         setActiveDocumentIdState((prevId) => {
-          const completedDocs = docs.filter((d) => d.extracted_text_status === 'completed');
-          if (prevId && docs.some((d) => d.id === prevId)) {
-            return prevId;
+          // If the user explicitly cleared the document selection, respect it
+          try {
+            if (!prevId && sessionStorage.getItem(ACTIVE_DOC_CLEARED_KEY) === '1') {
+              return '';
+            }
+          } catch {
+            // Ignore
           }
+
+          if (prevId) {
+            if (docs.some((d) => d.id === prevId)) {
+              return prevId;
+            }
+            // Active document was deleted: clear selection rather than switching to an unrelated file
+            try {
+              sessionStorage.removeItem(ACTIVE_DOC_KEY);
+              sessionStorage.setItem(ACTIVE_DOC_CLEARED_KEY, '1');
+            } catch {
+              // Ignore
+            }
+            return '';
+          }
+
+          const completedDocs = docs.filter((d) => d.extracted_text_status === 'completed');
           const fallbackId = completedDocs[0]?.id || docs[0]?.id || '';
           try {
             if (fallbackId) {
@@ -138,6 +182,7 @@ export function SessionProvider({ children }) {
         activeDocument,
         activeDocumentId,
         setActiveDocumentId,
+        removeDocumentFromState,
         syncDocuments,
         loading,
         error,

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   BookOpen,
   BrainCircuit,
+  CheckCircle2,
   Download,
   FileText,
   FolderOpen,
@@ -10,6 +11,7 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useSession } from '../hooks/useSession';
 import {
@@ -36,10 +38,24 @@ const TYPE_META = {
 };
 
 export default function StudyLibrary() {
-  const { documents, syncDocuments, refreshSession } = useSession();
+  const {
+    documents,
+    activeDocumentId,
+    setActiveDocumentId,
+    removeDocumentFromState,
+    syncDocuments,
+    refreshSession,
+  } = useSession();
   const [activeTab, setActiveTab] = useState('all');
   const [materials, setMaterials] = useState([]);
   const [confirmItem, setConfirmItem] = useState(null);
+  const [toastMsg, setToastMsg] = useState(null);
+
+  useEffect(() => {
+    if (!toastMsg) return undefined;
+    const timer = setTimeout(() => setToastMsg(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toastMsg]);
 
   const loadMaterials = useCallback(async () => {
     try {
@@ -56,12 +72,21 @@ export default function StudyLibrary() {
 
   const handleConfirmDelete = async () => {
     if (!confirmItem) return;
+    const item = confirmItem;
     try {
-      if (confirmItem.kind === 'document') {
-        await deleteDocument(confirmItem.id);
+      if (item.kind === 'document') {
+        const res = await deleteDocument(item.id);
+        removeDocumentFromState(item.id);
+        if (activeDocumentId === item.id) {
+          setActiveDocumentId('');
+        }
+        setToastMsg(
+          res?.message || `Deleted "${item.title}" and removed from AI index.`
+        );
         await syncDocuments();
       } else {
-        await deleteLibraryMaterial(confirmItem.id);
+        await deleteLibraryMaterial(item.id);
+        setToastMsg(`Deleted "${item.title}" from Study Library.`);
         await loadMaterials();
       }
       await refreshSession();
@@ -83,6 +108,25 @@ export default function StudyLibrary() {
   return (
     <div className="space-y-6">
       {/* Filter Header */}
+      {toastMsg && (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-900 shadow-2xs"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            <span>{toastMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMsg(null)}
+            className="text-emerald-700 hover:text-emerald-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
         <div className="flex flex-wrap gap-1.5">
           {TABS.map((tab) => (
@@ -263,11 +307,15 @@ export default function StudyLibrary() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
             <h3 className="font-display text-base font-bold text-slate-900">
-              Confirm Deletion
+              {confirmItem.kind === 'document'
+                ? 'Delete document and remove from AI index?'
+                : 'Confirm Deletion'}
             </h3>
             <p className="mt-2 text-xs leading-relaxed text-slate-600">
-              Are you sure you want to delete <strong>{confirmItem.title}</strong> from your
-              session library?
+              Are you sure you want to delete <strong>{confirmItem.title}</strong>
+              {confirmItem.kind === 'document'
+                ? ' and remove all of its indexed FTS5 chunks from your session?'
+                : ' from your session library?'}
             </p>
             <div className="mt-5 flex justify-end gap-2.5">
               <button

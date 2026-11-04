@@ -420,7 +420,7 @@ async def generate_and_validate_json(
 async def build_bounded_source_context(
     db: aiosqlite.Connection,
     session_id: str,
-    document_id: str,
+    document_id: Optional[str],
     query: str = "",
     max_chunks: int = 12,
     max_chars: int = MAX_PROMPT_SOURCE_CHARS,
@@ -428,21 +428,26 @@ async def build_bounded_source_context(
     """
     Retrieve relevant chunks from SQLite FTS5 for (session_id, document_id) and bound total text length.
     Formats chunks as clean, academic sections without internal confusing tags.
+    If document_id is None/empty or deleted, returns empty context immediately.
     """
+    clean_doc_id = (document_id or "").strip()
+    if not clean_doc_id:
+        return "", [], ""
+
     doc_cur = await db.execute(
         "SELECT original_filename FROM documents WHERE id = ? AND session_id = ?",
-        (document_id, session_id),
+        (clean_doc_id, session_id),
     )
     doc_row = await doc_cur.fetchone()
-    if doc_row:
-        doc_name = doc_row["original_filename"] if hasattr(doc_row, "keys") else doc_row[0]
-    else:
-        doc_name = "Study Document"
+    if not doc_row:
+        return "", [], ""
+
+    doc_name = doc_row["original_filename"] if hasattr(doc_row, "keys") else doc_row[0]
 
     chunks = await retrieve_relevant_chunks(
         db=db,
         session_id=session_id,
-        document_id=document_id,
+        document_id=clean_doc_id,
         query=query,
         limit=max_chunks,
     )

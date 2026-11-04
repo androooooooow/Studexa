@@ -1,8 +1,9 @@
 import aiosqlite
-from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from app.database import get_db
 from app.dependencies import get_current_session
 from app.schemas.document import (
+    DocumentDeleteResponse,
     DocumentDetailResponse,
     DocumentItem,
     DocumentListResponse,
@@ -49,12 +50,15 @@ async def get_document_endpoint(
     return DocumentDetailResponse(**doc)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{document_id}", response_model=DocumentDeleteResponse, status_code=status.HTTP_200_OK)
 async def delete_document_endpoint(
     document_id: str,
     current_session: dict = Depends(get_current_session),
     db: aiosqlite.Connection = Depends(get_db),
-) -> Response:
+) -> DocumentDeleteResponse:
     """Delete an owned document, its chunks, FTS5 entries, and stored disk file."""
     await delete_session_document(db, current_session["id"], document_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return DocumentDeleteResponse(
+        success=True,
+        message="Document deleted successfully",
+    )

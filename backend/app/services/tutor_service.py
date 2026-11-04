@@ -185,6 +185,10 @@ async def create_or_append_user_tutor_message(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Conversation not found in your session.",
             )
+        await db.execute(
+            "UPDATE tutor_conversations SET document_id = ? WHERE id = ? AND session_id = ?",
+            (clean_doc_id, conversation_id, session_id),
+        )
     else:
         conversation_id = str(uuid.uuid4())
         short_title = question.strip()[:60] or f"Accountancy Chat — {doc_filename}"
@@ -214,14 +218,19 @@ async def handle_tutor_job(
     session_id: str,
     payload: Dict[str, Any],
 ) -> Dict[str, Any]:
-    document_id = payload.get("document_id")
+    raw_doc_id = payload.get("document_id")
+    document_id = (
+        raw_doc_id.strip()
+        if isinstance(raw_doc_id, str) and raw_doc_id.strip()
+        else None
+    )
     question = (payload.get("prompt") or "").strip()
     options = payload.get("options") or {}
     conversation_id = options["conversation_id"]
 
     excerpts = ""
     chunk_refs: List[int] = []
-    if document_id:
+    if document_id is not None:
         excerpts, chunk_refs, _ = await build_bounded_source_context(
             db=db,
             session_id=session_id,

@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional
 import aiosqlite
 
 
@@ -28,14 +28,19 @@ def build_fts5_query(raw_query: str) -> str:
 async def retrieve_relevant_chunks(
     db: aiosqlite.Connection,
     session_id: str,
-    document_id: str,
+    document_id: Optional[str],
     query: str = "",
     limit: int = 6,
 ) -> List[dict]:
     """
     Search document_chunks_fts using SQLite FTS5 BM25 ranking scoped strictly to session_id & document_id.
     Falls back to the first N sequential chunks if query is empty or has no keyword hits.
+    Returns [] immediately if document_id is None or empty (Standalone Mode).
     """
+    clean_doc_id = (document_id or "").strip()
+    if not clean_doc_id:
+        return []
+
     fts_query = build_fts5_query(query)
     if fts_query:
         cursor = await db.execute(
@@ -52,7 +57,7 @@ async def retrieve_relevant_chunks(
             ORDER BY rank_score ASC, c.chunk_index ASC
             LIMIT ?
             """,
-            (fts_query, session_id, document_id, limit),
+            (fts_query, session_id, clean_doc_id, limit),
         )
         rows = await cursor.fetchall()
         if rows:
@@ -70,7 +75,7 @@ async def retrieve_relevant_chunks(
         ORDER BY chunk_index ASC
         LIMIT ?
         """,
-        (session_id, document_id, limit),
+        (session_id, clean_doc_id, limit),
     )
     fallback_rows = await fallback_cursor.fetchall()
     return [

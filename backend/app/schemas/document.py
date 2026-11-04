@@ -24,3 +24,9 @@ class DocumentDetailResponse(DocumentItem):
 
 class DocumentListResponse(BaseModel):
     documents: List[DocumentItem]
+
+
+class DocumentDeleteResponse(BaseModel):
+    success: bool = True
+    message: str = "Document deleted successfully"
+

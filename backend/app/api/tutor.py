@@ -29,15 +29,20 @@ async def tutor_chat_endpoint(
     Save the student's question in tutor_messages and enqueue a serialized AI Tutor job
     that retrieves FTS5 chunks before generating a grounded response.
     """
+    clean_doc_id = (
+        body.document_id.strip()
+        if isinstance(body.document_id, str) and body.document_id.strip()
+        else None
+    )
     conversation_id, user_msg_id = await create_or_append_user_tutor_message(
         db=db,
         session_id=current_session["id"],
-        document_id=body.document_id,
+        document_id=clean_doc_id,
         question=body.question,
         conversation_id=body.conversation_id,
     )
     payload = {
-        "document_id": body.document_id,
+        "document_id": clean_doc_id,
         "prompt": body.question,
         "options": {
             "conversation_id": conversation_id,

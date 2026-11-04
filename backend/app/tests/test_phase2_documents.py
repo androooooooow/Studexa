@@ -206,7 +206,28 @@ async def test_document_session_isolation_and_deletion():
         del_a = await client.delete(
             f"/api/documents/{doc_id}", headers={"X-Session-Token": token_a}
         )
-        assert del_a.status_code == 204
+        assert del_a.status_code == 200
+        assert del_a.json() == {
+            "success": True,
+            "message": "Document deleted successfully",
+        }
 
         after_a = await client.get("/api/documents", headers={"X-Session-Token": token_a})
         assert len(after_a.json()["documents"]) == 0
+
+        # Verify chunks and FTS5 index entries are completely removed after deletion
+        async with aiosqlite.connect(settings.sqlite_path) as db:
+            db.row_factory = aiosqlite.Row
+            s_a = (await client.get("/api/session/me", headers={"X-Session-Token": token_a})).json()
+            rem_chunks = await retrieve_relevant_chunks(
+                db=db,
+                session_id=s_a["session_id"],
+                document_id=doc_id,
+                query="Private study notes",
+            )
+            assert rem_chunks == []
+            fts_cur = await db.execute(
+                "SELECT COUNT(*) AS cnt FROM document_chunks_fts WHERE document_chunks_fts MATCH 'Private'"
+            )
+            fts_row = await fts_cur.fetchone()
+            assert fts_row["cnt"] == 0
