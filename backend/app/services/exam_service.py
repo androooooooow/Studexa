@@ -162,14 +162,14 @@ async def list_session_exam_attempts(
         """
         SELECT
             a.id,
-            a.material_id AS exam_id,
+            a.exam_id,
             COALESCE(m.title, 'Practice Assessment') AS exam_title,
             a.score,
             a.total_questions,
             a.percentage,
             a.created_at
-        FROM quiz_attempts a
-        LEFT JOIN generated_materials m ON m.id = a.material_id
+        FROM exam_attempts a
+        LEFT JOIN generated_materials m ON m.id = a.exam_id
         WHERE a.session_id = ?
         ORDER BY a.created_at DESC
         """,

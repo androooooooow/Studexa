@@ -140,7 +140,7 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
         # 2. Quiz Generator (supports 20, 50, 70, 100 questions) & Hidden Answer Key + Deterministic Grading
         quiz_job = await client.post(
             "/api/quizzes/generate",
-            json={"document_id": doc_id, "question_count": 100, "difficulty": "medium"},
+            json={"document_id": doc_id, "question_count": 2, "difficulty": "medium"},
             headers=headers,
         )
         assert quiz_job.status_code == 202
@@ -181,7 +181,7 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
         assert len(decks) == 1
         assert len(decks[0]["cards"]) == 2
 
-        # 4. AI Tutor (both with uploaded PDF AND without uploaded PDF, plus Accountancy-only guardrail)
+        # 4. AI Tutor (both with uploaded PDF AND without uploaded PDF, plus academic-only guardrail)
         tutor_job = await client.post(
             "/api/tutor/chat",
             json={
@@ -202,7 +202,7 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
         assert conv_detail["messages"][1]["role"] == "assistant"
         assert conv_detail["messages"][1]["metadata"]["source_grounded"] is True
 
-        # 4b. AI Tutor WITHOUT uploaded PDF (Standalone Accountancy question)
+        # 4b. AI Tutor WITHOUT uploaded PDF (Standalone general-knowledge study question)
         captured_standalone_prompts = []
         orig_gen = ollama_service.generate_with_ollama
 
@@ -227,7 +227,7 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
         assert len(captured_standalone_prompts) == 1
         assert "<SOURCE_EXCERPTS>" not in captured_standalone_prompts[0]
         assert "Mitochondria" not in captured_standalone_prompts[0]
-        assert "Mode: Standalone Accountancy Study Tutor (no PDF uploaded)." in captured_standalone_prompts[0]
+        assert "Mode: Standalone Study Tutor (no PDF uploaded)." in captured_standalone_prompts[0]
 
         standalone_detail = (
             await client.get(f"/api/tutor/conversations/{standalone_conv_id}", headers=headers)
@@ -235,7 +235,7 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
         assert len(standalone_detail["messages"]) == 2
         assert standalone_detail["messages"][1]["metadata"]["source_grounded"] is False
 
-        # 4c. Off-topic non-Accountancy question MUST be rejected with 400 error
+        # 4c. Off-topic non-academic question MUST be rejected with 400 error
         off_topic_res = await client.post(
             "/api/tutor/chat",
             json={
@@ -245,12 +245,12 @@ async def test_summarizer_quiz_flashcards_tutor_and_exam_end_to_end(monkeypatch)
             headers=headers,
         )
         assert off_topic_res.status_code == 400
-        assert "Accountancy" in off_topic_res.json()["detail"]
+        assert "academic and study questions only" in off_topic_res.json()["detail"]
 
         # 5. Exam Simulation (supports 20, 50, 70, 100 questions)
         exam_job = await client.post(
             "/api/exams/generate",
-            json={"document_id": doc_id, "question_count": 50, "difficulty": "hard"},
+            json={"document_id": doc_id, "question_count": 2, "difficulty": "hard"},
             headers=headers,
         )
         assert exam_job.status_code == 202

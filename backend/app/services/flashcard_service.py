@@ -180,6 +180,7 @@ async def list_session_flashcard_decks(
                 id=row["id"],
                 document_id=row["document_id"],
                 title=row["title"],
+                card_count=len(cards),
                 cards=cards,
                 created_at=row["created_at"],
             )

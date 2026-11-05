@@ -333,26 +333,38 @@ class SingleAIQueueWorker:
     """
 
     def __init__(self) -> None:
-        self._generation_lock = asyncio.Lock()
-        self._wakeup = asyncio.Event()
+        self._generation_lock: Optional[asyncio.Lock] = None
+        self._wakeup: Optional[asyncio.Event] = None
         self._task: Optional[asyncio.Task] = None
         self._running = False
 
+    @property
+    def generation_lock(self) -> asyncio.Lock:
+        if self._generation_lock is None:
+            self._generation_lock = asyncio.Lock()
+        return self._generation_lock
+
+    @property
+    def wakeup(self) -> asyncio.Event:
+        if self._wakeup is None:
+            self._wakeup = asyncio.Event()
+        return self._wakeup
+
     def notify(self) -> None:
-        self._wakeup.set()
+        self.wakeup.set()
 
     async def start(self) -> None:
         if self._running:
             return
         await recover_stranded_jobs()
         self._running = True
-        self._wakeup.set()
+        self.wakeup.set()
         self._task = asyncio.create_task(self._run_loop(), name="studymate-ai-worker")
         logger.info("Started SingleAIQueueWorker (max_concurrent=1, max_queue=%d)", settings.AI_MAX_QUEUE)
 
     async def stop(self) -> None:
         self._running = False
-        self._wakeup.set()
+        self.wakeup.set()
         if self._task:
             self._task.cancel()
             try:
@@ -360,6 +372,8 @@ class SingleAIQueueWorker:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        self._generation_lock = None
+        self._wakeup = None
         logger.info("Stopped SingleAIQueueWorker")
 
     async def claim_oldest_queued_job(self) -> Optional[dict]:
@@ -421,7 +435,7 @@ class SingleAIQueueWorker:
         Claim and process at most one queued job under the global generation lock.
         Returns True if a job was processed, or False if the queue was empty.
         """
-        async with self._generation_lock:
+        async with self.generation_lock:
             claimed = await self.claim_oldest_queued_job()
             if claimed is None:
                 return False
@@ -496,9 +510,9 @@ class SingleAIQueueWorker:
                 if processed:
                     # Immediately check if another job is waiting in FIFO order
                     continue
-                self._wakeup.clear()
+                self.wakeup.clear()
                 try:
-                    await asyncio.wait_for(self._wakeup.wait(), timeout=2.0)
+                    await asyncio.wait_for(self.wakeup.wait(), timeout=2.0)
                 except asyncio.TimeoutError:
                     pass
             except asyncio.CancelledError:

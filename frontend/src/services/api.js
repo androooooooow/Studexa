@@ -291,7 +291,7 @@ export async function fetchFlashcardDecks() {
 }
 
 export async function sendTutorQuestion({ document_id = null, question, conversation_id = null }) {
-  // Standalone Accountancy Mode: never send undefined/'' — normalize to null.
+  // Standalone Study Tutor Mode: never send undefined/'' — normalize to null.
   const cleanDocId =
     typeof document_id === 'string' && document_id.trim() ? document_id.trim() : null;
   const response = await apiClient.post('/api/tutor/chat', {

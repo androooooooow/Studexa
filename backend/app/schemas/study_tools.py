@@ -1,6 +1,6 @@
 import re
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 
 def _coerce_chunk_ref(val: Any) -> Optional[int]:
@@ -353,7 +353,13 @@ class ExamGenerateRequest(BaseModel):
 # -------------------- AI TUTOR --------------------
 class TutorLLMOutput(BaseModel):
     answer: str
-    is_accountancy_related: bool = True
+    # Accepts the legacy "is_accountancy_related" key from older prompts / cached model outputs.
+    is_study_related: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "is_study_related", "is_academic_related", "is_accountancy_related"
+        ),
+    )
     source_grounded: bool = True
     knowledge_label: str = "Grounded in uploaded document"
     cited_chunks: List[int] = Field(default_factory=list)
@@ -384,7 +390,12 @@ class TutorLLMOutput(BaseModel):
             raw_ans = "\n".join(str(x).strip() for x in raw_ans if str(x).strip())
         out["answer"] = str(raw_ans).strip()
 
-        for bool_field in ("is_accountancy_related", "source_grounded"):
+        for bool_field in (
+            "is_study_related",
+            "is_academic_related",
+            "is_accountancy_related",
+            "source_grounded",
+        ):
             if bool_field in out and not isinstance(out[bool_field], bool):
                 out[bool_field] = str(out[bool_field]).strip().lower() not in (
                     "false",
@@ -405,7 +416,7 @@ class TutorLLMOutput(BaseModel):
 
 
 class TutorChatRequest(BaseModel):
-    # Optional: None / "" / omitted => Standalone Accountancy Mode (No PDF required)
+    # Optional: None / "" / omitted => Standalone Study Tutor Mode (general academic knowledge, no PDF required)
     document_id: Optional[str] = None
     question: str = Field(..., min_length=2, max_length=1500)
     conversation_id: Optional[str] = None

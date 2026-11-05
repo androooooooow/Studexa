@@ -19,18 +19,18 @@ import {
   sendTutorQuestion,
 } from '../services/api';
 
-const SAMPLE_ACCOUNTANCY_QUESTIONS = [
-  'What is the difference between accrual and cash basis accounting under PAS 1?',
-  'How do you record adjusting entries for accrued expenses and unearned revenue?',
-  'Explain the audit risk model (Inherent, Control, and Detection Risk).',
-  'How is straight-line vs. double-declining balance depreciation computed?',
+const SAMPLE_STUDY_QUESTIONS = [
+  'Explain the difference between mitosis and meiosis in biology.',
+  'How do you solve systems of linear equations using substitution?',
+  'What were the primary causes and consequences of World War I?',
+  'Explain the core principles of Object-Oriented Programming (OOP).',
 ];
 
 export default function AITutor() {
   const { documents, activeDocumentId, setActiveDocumentId, refreshSession } =
     useSession();
 
-  // null represents General Accountancy Tutor (No PDF Required)
+  // null represents General Academic Tutor (No PDF Required)
   const [selectedDocumentId, setSelectedDocumentId] = useState(
     activeDocumentId || null
   );
@@ -137,7 +137,7 @@ export default function AITutor() {
       setError(
         formatApiError(
           err,
-          'Only Accountancy and study-related questions are allowed.'
+          'Only academic and study-related questions are allowed.'
         )
       );
     } finally {
@@ -157,7 +157,7 @@ export default function AITutor() {
         <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-sm font-bold text-slate-900">
-              Accountancy Tutor Mode
+              AI Study Tutor
             </h2>
             <button
               type="button"
@@ -169,37 +169,37 @@ export default function AITutor() {
             </button>
           </div>
 
-          {/* Optional Document or General Accountancy Selector with Direct Inline Upload */}
+          {/* Optional Document or General Academic Selector with Direct Inline Upload */}
           <div className="mt-4">
             <SourceDocumentSelector
               label="Knowledge Source (PDF Optional)"
               allowNone={true}
-              noneLabel="General Accountancy Tutor (No PDF Required)"
+              noneLabel="General Academic Tutor (No PDF Required)"
               valueOverride={selectedDocumentId || ''}
               onChangeOverride={handleChangeDocMode}
             />
           </div>
 
-          {/* Strict Accountancy Guardrail Notice */}
+          {/* Strict Academic Guardrail Notice */}
           <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-[11px] leading-relaxed text-indigo-950">
             <p className="font-bold text-indigo-800">
-              Strictly Accountancy &amp; Study Only:
+              Strictly Academic &amp; Study Only:
             </p>
             <p className="mt-0.5 text-indigo-900/80">
-              Covers FAR, AFAR, Auditing, Taxation, MAS, RFBT, Bookkeeping, and
-              uploaded course files. Non-Accountancy or off-topic questions will
-              return an error.
+              Covers all school subjects, homework questions, concepts, and
+              uploaded course files. Questions unrelated to school or learning
+              will return an error.
             </p>
           </div>
         </div>
 
-        {/* Sample Accountancy Questions */}
+        {/* Sample Study Questions */}
         <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
           <h3 className="font-display text-xs font-bold tracking-wider text-slate-500 uppercase">
-            Quick Accountancy Prompts
+            Quick Study Prompts
           </h3>
           <div className="mt-3 space-y-2">
-            {SAMPLE_ACCOUNTANCY_QUESTIONS.map((sample) => (
+            {SAMPLE_STUDY_QUESTIONS.map((sample) => (
               <button
                 key={sample}
                 type="button"
@@ -241,7 +241,7 @@ export default function AITutor() {
             )}
             {conversations.length === 0 ? (
               <p className="text-xs text-slate-500">
-                Ask your first Accountancy question to save a conversation.
+                Ask your first study question to save a conversation.
               </p>
             ) : (
               conversations.map((conv) => (
@@ -262,7 +262,7 @@ export default function AITutor() {
                     {conv.title}
                   </span>
                   <span className="mt-0.5 text-[11px] text-slate-500">
-                    {conv.document_id ? 'Document-Grounded' : 'General Accountancy'} •{' '}
+                    {conv.document_id ? 'Document-Grounded' : 'General Academic'} •{' '}
                     {new Date(conv.created_at).toLocaleTimeString()}
                   </span>
                 </button>
@@ -283,12 +283,12 @@ export default function AITutor() {
               <p className="text-xs font-bold text-slate-900">
                 {activeConversation
                   ? activeConversation.title
-                  : 'New Accountancy Conversation'}
+                  : 'New Study Conversation'}
               </p>
               <p className="text-[11px] text-slate-500">
                 {selectedDocumentId
-                  ? 'Grounded in selected PDF/DOCX + Accountancy Rules'
-                  : 'Standalone Accountancy Mode (No PDF required)'}
+                  ? 'Grounded in selected PDF/DOCX + General Academic Knowledge'
+                  : 'Standalone Study Mode (No PDF required)'}
               </p>
             </div>
           </div>
@@ -304,7 +304,7 @@ export default function AITutor() {
             </button>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">
               <BookOpen className="h-3.5 w-3.5" />
-              <span>Accountancy Study Only</span>
+              <span>Academic &amp; Study Only</span>
             </span>
           </div>
         </div>
@@ -319,17 +319,18 @@ export default function AITutor() {
               <div className="max-w-2xl rounded-2xl rounded-tl-xs border border-slate-200/80 bg-slate-50 p-4 text-xs leading-relaxed text-slate-700">
                 <div className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-800">
                   <ShieldCheck className="h-3 w-3" />
-                  Accountancy &amp; CPA Study Tutor (Works With or Without PDF)
+                  AI Study Tutor — All Subjects (Works With or Without PDF)
                 </div>
                 <p>
-                  Welcome! You can ask me any <strong>Accountancy study question</strong>{' '}
-                  right now—even without uploading a PDF (covering FAR, AFAR,
-                  Auditing, Taxation, MAS, RFBT, and Bookkeeping)—or select an
+                  Welcome! You can ask me any <strong>academic or study question</strong>{' '}
+                  right now—even without uploading a PDF (Math, Science, History,
+                  Literature, Business, Coding, and more)—or select an
                   uploaded document on the left for source-grounded answers.
                 </p>
                 <p className="mt-1.5 text-[11px] text-slate-500">
-                  Note: Questions unrelated to Accountancy or studying are
-                  automatically blocked with an error.
+                  Note: Friendly greetings are always welcome, but questions
+                  unrelated to school or learning are automatically blocked with
+                  an error.
                 </p>
               </div>
             </div>
@@ -401,7 +402,7 @@ export default function AITutor() {
               <span>
                 {jobState.status === 'queued'
                   ? `Waiting in FIFO queue (Position #${jobState.queue_position || 1})…`
-                  : 'Generating Accountancy explanation with Gemma 3 1B…'}
+                  : 'Generating study explanation with Gemma 3 1B…'}
               </span>
             </div>
           )}
@@ -433,8 +434,8 @@ export default function AITutor() {
               disabled={Boolean(jobState)}
               placeholder={
                 selectedDocumentId
-                  ? 'Ask an Accountancy question about your selected document…'
-                  : 'Ask any Accountancy study question (FAR, AFAR, Auditing, Tax, MAS, RFBT)…'
+                  ? 'Ask a study question about your selected document…'
+                  : 'Ask any academic or study question (Math, Science, History, Coding...)'
               }
               className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none disabled:opacity-60"
             />

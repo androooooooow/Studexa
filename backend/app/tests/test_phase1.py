@@ -38,8 +38,8 @@ async def test_health_endpoint():
         assert data["status"] == "ok"
         assert data["database"] == "connected"
         assert data["ai_model"] == "gemma3:1b"
-        assert data["ai_max_concurrent"] == 1
-        assert data["ai_max_queue"] == 10
+        assert data["ai_max_concurrent"] == settings.AI_MAX_CONCURRENT
+        assert data["ai_max_queue"] == settings.AI_MAX_QUEUE
         assert res.headers.get("X-Content-Type-Options") == "nosniff"
         assert res.headers.get("X-Frame-Options") == "DENY"
 

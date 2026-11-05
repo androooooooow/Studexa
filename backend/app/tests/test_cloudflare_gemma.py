@@ -144,9 +144,9 @@ def test_extract_cf_response_handles_dict_and_string_variants(monkeypatch):
         "result": {
             "response": {
                 "answer": "Accrual accounting recognizes revenue when earned.",
-                "is_accountancy_related": True,
+                "is_study_related": True,
                 "source_grounded": False,
-                "knowledge_label": "General Accountancy Study Knowledge",
+                "knowledge_label": "General Academic Knowledge",
                 "cited_chunks": [],
             }
         },
@@ -179,5 +179,5 @@ def test_extract_cf_response_handles_dict_and_string_variants(monkeypatch):
         )
     )
     assert tutor_out.answer == "Accrual accounting recognizes revenue when earned."
-    assert tutor_out.is_accountancy_related is True
+    assert tutor_out.is_study_related is True
     assert tutor_out.source_grounded is False

@@ -85,7 +85,7 @@ const PAGE_TITLES = {
   },
   '/tutor': {
     title: 'AI Study Tutor',
-    subtitle: 'Ask questions grounded in your uploaded documents via FTS5 retrieval',
+    subtitle: 'Ask any academic question — with or without your uploaded documents',
   },
   '/exams': {
     title: 'Exam Simulation',

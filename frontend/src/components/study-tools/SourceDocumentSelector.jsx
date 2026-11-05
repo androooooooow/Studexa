@@ -15,7 +15,7 @@ import { deleteDocument, uploadDocument } from '../../services/api';
 export default function SourceDocumentSelector({
   label = 'Source Document',
   allowNone = false,
-  noneLabel = 'General Accountancy Tutor (No PDF Required)',
+  noneLabel = 'General Academic Tutor (No PDF Required)',
   valueOverride = undefined,
   onChangeOverride = undefined,
 }) {
